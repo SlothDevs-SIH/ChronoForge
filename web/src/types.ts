@@ -1,5 +1,5 @@
 // Mirrors the JSON contract in /contract. Keep in sync with contract/README.md.
-export type City = "bengaluru" | "pune" | "mumbai" | "synthetic";
+export type City = "bengaluru" | "pune" | "mumbai" | "synthetic" | "demo";
 
 export interface Ticket {
   ticket_id: string;
@@ -21,6 +21,7 @@ export interface Ticket {
   status: "open" | "closed" | "reopened";
   closure_note: string | null;
   closure_photo_url: string | null;
+  complaint_photo_url?: string | null;   // only the demo photo set (the "before" photo)
 }
 
 export interface Reason { feature: string; value: number | string | null; shap: number | null }
