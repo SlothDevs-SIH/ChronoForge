@@ -96,3 +96,12 @@ def handle_reply(channel: str, chat_id: str | int, text: str, has_photo: bool = 
     audit.append("tool_result", {"ticket_id": ticket_id, "tool": "ask_citizen", "evidence_id": ev.evidence_id,
                                  "check": ev.check, "verdict": ev.verdict, "lr": ev.likelihood_ratio})
     return ev
+
+
+def poll_once(offset: int | None = None, timeout: int = 20) -> tuple[list[dict], int | None]:
+    """Long-poll getUpdates (no public URL needed). Returns (updates, next_offset)."""
+    r = httpx.get(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/getUpdates",
+                  params={"timeout": timeout, **({"offset": offset} if offset else {})}, timeout=timeout + 10)
+    r.raise_for_status()
+    updates = r.json()["result"]
+    return updates, (updates[-1]["update_id"] + 1 if updates else offset)

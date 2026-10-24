@@ -27,7 +27,7 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [ ] **Milestone:** agent runs on a real scored ticket
 
 ## Phase 3: Citizen channel
-- [ ] Telegram round trip: send, reply, parse, Evidence (code + tests done; needs a real bot token to try live)
+- [x] Telegram round trip: send, reply, parse, Evidence (verified live with @TruClosebot, long-polling)
 - [x] Keyword/number reply parser (en/hi/mr/kn)
 - [x] LLM zero-shot fallback for free-text replies
 - [ ] Real satellite tool wired in from Soham

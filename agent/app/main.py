@@ -1,6 +1,8 @@
 """Agent service (port 8002). Run: uvicorn app.main:app --port 8002"""
 import asyncio
 import json
+import threading
+import time
 
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
@@ -45,19 +47,55 @@ def register_contact(ticket_id: str, req: ContactRequest):
     return {"ticket_id": ticket_id, "chat_hash": telegram.chat_hash(req.chat_id)}
 
 
+class AskRequest(BaseModel):
+    category: str = "pothole"
+    area: str = "your area"
+    date: str = "recently"
+
+
+@app.post("/citizen/{ticket_id}/ask")
+def ask_now(ticket_id: str, req: AskRequest):
+    """Demo trigger: send the "Was it fixed?" message to the registered contact."""
+    if not telegram.send_request(ticket_id, req.category, req.area, req.date):
+        raise HTTPException(409, "no usable contact for this ticket")
+    return {"sent": True}
+
+
 @app.post("/channels/telegram/webhook")
 def telegram_webhook(update: dict, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
     if config.TELEGRAM_WEBHOOK_SECRET and x_telegram_bot_api_secret_token != config.TELEGRAM_WEBHOOK_SECRET:
         raise HTTPException(403, "bad secret")
-    fallback = None
-    if llm.available_providers():
-        fallback = llm_planner.classify_reply
-    ev = telegram.handle_update(update, fallback)
+    ev, run_id = process_telegram_update(update)
     if ev is None:
         return {"ok": True, "evidence": None}
+    return {"ok": True, "evidence_id": ev.evidence_id, "run_id": run_id}
+
+
+def process_telegram_update(update: dict):
+    fallback = llm_planner.classify_reply if llm.available_providers() else None
+    ev = telegram.handle_update(update, fallback)
+    if ev is None:
+        return None, None
     run_id = agent.start_run(ev.ticket_id)   # re-run so the new evidence is fused into a fresh verdict
     agent.run_in_background(run_id)
-    return {"ok": True, "evidence_id": ev.evidence_id, "run_id": run_id}
+    return ev, run_id
+
+
+def _poll_loop():
+    offset = None
+    while True:
+        try:
+            updates, offset = telegram.poll_once(offset)
+            for u in updates:
+                process_telegram_update(u)
+        except Exception:
+            time.sleep(3)
+
+
+@app.on_event("startup")
+def start_polling():
+    if config.TELEGRAM_POLLING and config.TELEGRAM_BOT_TOKEN:
+        threading.Thread(target=_poll_loop, daemon=True).start()
 
 
 @app.get("/channels/whatsapp/webhook")
