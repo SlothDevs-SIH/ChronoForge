@@ -234,3 +234,15 @@ def test_committed_openapi_file_matches_the_app():
     """agent/openapi.json is what the web client's types are generated from: regenerate it with scripts/export_openapi.py."""
     committed = json.loads((AGENT_DIR / "openapi.json").read_text(encoding="utf-8"))
     assert committed == json.loads(json.dumps(app.openapi())), "run: python scripts/export_openapi.py"
+
+
+def test_postgres_cursor_can_be_looped_over_like_a_sqlite_cursor():
+    """cases.tracked_tickets does `for r in conn.execute(...)`; on Postgres that raised TypeError and the watcher never ran."""
+    class FakeCursor:
+        description = [("ticket_id",)]
+        def fetchall(self): return [{"ticket_id": "a"}, {"ticket_id": "b"}]
+        def fetchone(self): return None
+    assert [r["ticket_id"] for r in db._PgCursor(FakeCursor())] == ["a", "b"]
+    class NoRows:
+        description = None
+    assert list(db._PgCursor(NoRows())) == []

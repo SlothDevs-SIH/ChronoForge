@@ -49,6 +49,10 @@ class _PgCursor:
     def fetchall(self):
         return self._cur.fetchall() if self._cur.description else []
 
+    def __iter__(self):
+        # sqlite3 cursors can be looped over directly; code written against SQLite does `for r in conn.execute(...)`
+        return iter(self.fetchall())
+
 
 class PgConnection:
     """One shared psycopg connection guarded by the module lock, reconnecting once if the server dropped it."""
