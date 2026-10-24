@@ -24,12 +24,17 @@ The JSON files in this folder are the data contract between Engine, Agent and th
 - Simulated municipal system: `GET /muni/tickets`, `POST /muni/tickets/{id}/reopen`, `POST /muni/tickets/{id}/escalate`
 
 **Agent, port 8002**
-- `POST /agent/run/{ticket_id}` returns `{run_id}`; `GET /agent/stream/{run_id}` (SSE trace); `GET /agent/runs/{run_id}`
-- `POST /evidence/photo`, `POST /citizen/send`, `POST /telegram/webhook`, `GET /whatsapp/webhook`
-- `GET /approvals?status=`, `POST /approvals/{id}/decide` with `{decision: approve|reject, note}`
-- `GET /audit`, `GET /audit/verify`
+- `POST /agent/run/{ticket_id}` returns `{run_id}` at once; the run is a background thread. A ticket the Engine cannot score ends the run with `status: "error"` (no invented prior)
+- `GET /agent/stream/{run_id}`: SSE. Events are **named**: `event: trace` with a trace-event JSON, then `event: end` with `{status}`. Clients must listen for `trace` (an unnamed `onmessage` never fires)
+- `GET /agent/runs/{run_id}` returns `{run_id, ticket_id, status, trace: [...], verdict}`
+- `POST /evidence/photo`; citizen: `POST /citizen/{ticket_id}/contact` (register a demo chat), `POST /citizen/{ticket_id}/ask`, `POST /citizen/send`; channels: `POST /telegram/webhook`, `GET|POST /whatsapp/webhook` (also under `/channels/...`)
+- `GET /approvals?status=` (default `pending`), `POST /approvals/{id}/decide` with `{decision: approve|reject, note}`; approving calls the Engine's `/muni/tickets/{id}/reopen` or `/escalate`
+- `GET /outcomes`, `GET /audit`, `GET /audit/verify`
 
 The web app reaches both through the Vite proxy: `/api/engine/*` and `/api/agent/*`.
+
+## The `demo` city
+12 synthetic tickets (`DEMO-000` to `DEMO-g00`) built from `demo/photos/manifest.json`: real open-licence photo content with synthetic EXIF, four kinds of planted failure (reused photo, shifted GPS, stale timestamp, still broken). `closure_photo_url` and `complaint_photo_url` are repo-relative paths the Agent resolves. The planted failures are ground truth in `truth_demo.parquet`, never on the ticket. See `INTEGRATION.md`.
 
 ## Ticket location fields
 `lat`, `lng` and `h3` can be null. `location_precision` says how much to trust them: `exact` (Mumbai), `generated` (synthetic cities), `ward_centroid` (Bengaluru, a ward's centre, h3 is null), `none`. Satellite checks and 100 m repeat features may only use `exact` and `generated`.

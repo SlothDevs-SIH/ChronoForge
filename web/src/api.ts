@@ -33,7 +33,16 @@ export const api = {
   /** Subscribe to the live agent trace. Returns a close function. */
   streamRun(runId: string, onEvent: (e: TraceEvent) => void, onEnd: () => void): () => void {
     const es = new EventSource(`${AGENT}/agent/stream/${runId}`);
-    es.onmessage = (m) => onEvent(JSON.parse(m.data) as TraceEvent);
+    // The Agent service sends NAMED events ("event: trace"); an unnamed listener would never fire for them.
+    // Listen to both, so either server behaviour works.
+    const handle = (m: MessageEvent) => {
+      try {
+        const e = JSON.parse(m.data);
+        if (e && typeof e.step === "number") onEvent(e as TraceEvent);   // ignore keep-alives and the end marker
+      } catch { /* not JSON: a comment or ping */ }
+    };
+    es.onmessage = handle;
+    es.addEventListener("trace", handle as EventListener);
     es.addEventListener("end", () => { es.close(); onEnd(); });
     es.onerror = () => { es.close(); onEnd(); };
     return () => es.close();

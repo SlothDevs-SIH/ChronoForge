@@ -3,7 +3,7 @@ import Triage from "./pages/Triage";
 import TicketDetail from "./pages/TicketDetail";
 import Approvals from "./pages/Approvals";
 
-const CITIES = ["", "bengaluru", "pune", "mumbai", "synthetic"];
+const CITIES = ["", "bengaluru", "pune", "mumbai", "synthetic", "demo"];
 
 export default function App() {
   const [params, setParams] = useSearchParams();

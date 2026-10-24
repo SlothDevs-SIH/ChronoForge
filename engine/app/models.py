@@ -3,7 +3,7 @@ from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel
 
-City = Literal["bengaluru", "pune", "mumbai", "synthetic"]
+City = Literal["bengaluru", "pune", "mumbai", "synthetic", "demo"]
 Category = Literal["pothole", "garbage", "streetlight", "drain", "water_leak", "other"]
 
 
@@ -27,6 +27,7 @@ class Ticket(BaseModel):
     status: Literal["open", "closed", "reopened"]
     closure_note: Optional[str] = None
     closure_photo_url: Optional[str] = None
+    complaint_photo_url: Optional[str] = None   # only the demo photo set has one (the "before" photo)
 
 
 class Reason(BaseModel):

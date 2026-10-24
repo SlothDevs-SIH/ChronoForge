@@ -175,10 +175,10 @@ We claim **no real-world false-closure rate**.
 | Scorer | Soham | **Done**: Bengaluru rank score (test AUROC about 0.60 to 0.64), Mumbai flag, synthetic calibrated model. Modest, honestly reported |
 | Satellite verifier (live STAC, cache fallback) | Soham | **Done**, narrow: large-area problems only, mostly cloud-limited in the monsoon; validated by placebo and injected change, not against real repairs |
 | Evaluation benchmark v1 | Soham | **Done** (synthetic injection on real tickets); agent cost-versus-accuracy still needs Ayush's real verifiers |
-| Photo verifier | Ayush | Stub on `main` (returns no information); real one not merged |
-| Agent planner and fusion | Ayush | Skeleton on `main`, tested; LLM chooser and real tools not merged |
-| Telegram channel, then WhatsApp | Ayush | Stub on `main` |
-| Approvals and audit log | Ayush | Skeleton on `main`, tested |
+| Photo verifier | Ayush | **Merged on `integration`**: duplicate, GPS and timestamp checks work on the 12-ticket demo set; CLIP and DINOv2 off and not run with real models, so "still broken" photos are missed |
+| Agent planner and fusion | Ayush | **Merged on `integration`**, 96 tests; guarded planner, skeptic, optional LLM planner; ran live against the Engine |
+| Telegram channel, then WhatsApp | Ayush | Telegram real and live-verified by Ayush; WhatsApp parked (Meta error). Demo only: needs a registered chat per ticket |
+| Approvals and audit log | Ayush | **Merged on `integration`**; approve flows into the Engine and the audit verifies |
 | Web app | Ishan | Skeleton on `main` (triage, ticket, approvals) |
 
 ## 13. Rules for slides and the pitch

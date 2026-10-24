@@ -30,6 +30,9 @@ ENGINE_URL = os.getenv("ENGINE_URL", "http://localhost:8001")
 DB_PATH = os.getenv("AGENT_DB", "agent.db")
 STEP_DELAY = float(os.getenv("STEP_DELAY", "0.4"))   # seconds between steps, for a visible live trace
 OUTCOME_CHECK_DELAY = float(os.getenv("OUTCOME_CHECK_DELAY", "30"))  # demo mode: 30 s
+SATELLITE_TIMEOUT = float(os.getenv("SATELLITE_TIMEOUT", "120"))  # a live Sentinel-2 read takes 20 to 60 s; cached answers are instant
+# With real services (AGENT_USE_STUBS=0) an unreachable Engine or an unknown ticket must fail loudly, never invent a stub prior.
+ALLOW_STUB_FALLBACK = os.getenv("AGENT_ALLOW_STUB_FALLBACK", "0") == "1"
 PHOTO_INDEX_PATH = os.getenv("PHOTO_INDEX", "data/photo_index.json")
 USE_STUBS = os.getenv("AGENT_USE_STUBS", "1") == "1"  # stub tools until real services are wired
 USE_CLIP = os.getenv("AGENT_USE_CLIP", "0") == "1"    # needs torch + open_clip_torch and a ~400 MB download

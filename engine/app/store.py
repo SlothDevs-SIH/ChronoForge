@@ -27,7 +27,7 @@ WAREHOUSE_DIR = Path(os.environ.get("WAREHOUSE_DIR", ROOT / "data" / "warehouse"
 
 TICKET_COLUMNS = ["ticket_id", "city", "data_quality", "source", "category", "text", "lang", "lat", "lng", "h3",
                   "location_precision", "ward", "created_at", "closed_at", "closed_by_hash", "status",
-                  "closure_note", "closure_photo_url"]
+                  "closure_note", "closure_photo_url", "complaint_photo_url"]
 
 
 def _now() -> str:
@@ -87,6 +87,8 @@ class WarehouseStore:
         self._con.execute("drop view if exists v")
         self._con.execute("drop table if exists tickets")
         self._con.execute("create table tickets as select * from read_parquet(?, union_by_name=true)", [files])
+        # only the demo set carries a "before" photo: keep the column when that file is absent
+        self._con.execute("alter table tickets add column if not exists complaint_photo_url varchar")
         self._con.execute("create view v as select t.* replace (coalesce(o.status, t.status) as status) "
                           "from tickets t left join status_overrides o on o.ticket_id = t.ticket_id")
         self._con.execute("drop view if exists vs")

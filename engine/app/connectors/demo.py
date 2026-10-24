@@ -1,41 +1,53 @@
-"""Demo connector: the labelled demo photo set (demo/photos/manifest.json) as closed tickets, so the whole loop can
-be shown on tickets that actually carry closure photos (Mumbai rows only have photo file names).
+"""Demo connector: the planted-failure photo set built for the live demo (demo/photos/manifest.json, by Ayush).
 
-Every ticket is data_quality "synthetic" in city "synthetic": the photo content is real open-licence imagery
-(see demo/photos/ATTRIBUTION.md) but the tickets, their EXIF location/time and the planted failures
-(reused photo, wrong location, stale timestamp, scene still broken) are demo data. Written to tickets_demo.parquet
-(file_stem) so it never overwrites the Sandbox City file.
+Real: the photo CONTENT (open-licence Wikimedia Commons images, credited in demo/photos/ATTRIBUTION.md).
+Invented: everything else. The EXIF location and time written onto the photos, the tickets, their dates and the planted
+failures are synthetic, and the tickets say so (data_quality="synthetic"). Each planted failure is ground truth: it goes to
+self.truth (a separate file) and never onto the ticket.
+
+These tickets exist so the real photo verifier has photos to check once the Engine serves the warehouse: without them none
+of the real tickets carries a closure photo. Photo paths are repo-relative, which is how the Agent resolves them.
 """
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
 
-from .base import ComplaintSource
+import h3
 
-DEMO_DIR = Path(__file__).resolve().parents[3] / "demo" / "photos"
-TEXT = {"pothole": "Pothole on the road surface.", "garbage": "Garbage dumped on the street."}
+from .base import ComplaintSource, Drop
+
+TEXT = {"pothole": "Demo ticket: pothole closed with a photo (planted-failure set)",
+        "garbage": "Demo ticket: garbage closed with a photo (planted-failure set)"}
 
 
 class DemoSource(ComplaintSource):
-    name = "demo_photo_set"
-    city = "synthetic"
-    file_stem = "demo"
+    name = "demo_set"
+    city = "demo"
 
-    def __init__(self, directory: Path = DEMO_DIR) -> None:
+    def __init__(self, manifest: Path, photo_root: str = "demo/photos") -> None:
         super().__init__()
-        self.dir = directory
+        self.manifest, self.photo_root = manifest, photo_root
 
     def fetch(self) -> Iterator[dict[str, Any]]:
-        yield from json.loads((self.dir / "manifest.json").read_text(encoding="utf-8"))
+        yield from json.loads(self.manifest.read_text(encoding="utf-8"))
 
-    def normalise(self, r: dict[str, Any]) -> dict[str, Any]:
+    def normalise(self, e: dict[str, Any]) -> dict[str, Any]:
+        for key in ("ticket_id", "category", "lat", "lng", "closed_at", "before", "after"):
+            if e.get(key) in (None, ""):
+                raise Drop(f"missing_{key}")
+        closed = datetime.fromisoformat(e["closed_at"].replace("Z", "+00:00"))
+        created = closed - timedelta(days=2)       # invented: the manifest only carries the closing time
+        failure = bool(e.get("planted_failure"))
+        self.truth.append({"ticket_id": e["ticket_id"], "gt_false_closure": int(failure),
+                           "gt_failure_mode": e.get("plan", "none") if failure else "none", "gt_site_changed": 0 if failure else 1})
+        iso = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
         return {
-            "ticket_id": r["ticket_id"], "city": "synthetic", "data_quality": "synthetic", "source": self.name,
-            "category": r["category"], "text": TEXT.get(r["category"], "Civic issue."), "lang": "en",
-            "lat": r["lat"], "lng": r["lng"], "h3": None, "location_precision": "generated", "ward": "Demo Ward",
-            "created_at": "2026-10-01T10:00:00Z", "closed_at": r["closed_at"], "closed_by_hash": None,
-            "status": "closed", "closure_note": "Work completed.",
-            "closure_photo_url": f"demo/photos/{r['after']}",
-            # extras (the API model ignores them)
-            "complaint_photo_url": f"demo/photos/{r['before']}", "demo_plan": r["plan"],
+            "ticket_id": e["ticket_id"], "city": self.city, "data_quality": "synthetic", "source": self.name,
+            "category": e["category"], "text": TEXT.get(e["category"], "Demo ticket"), "lang": "en",
+            "lat": float(e["lat"]), "lng": float(e["lng"]), "h3": h3.latlng_to_cell(float(e["lat"]), float(e["lng"]), 9),
+            "ward": "Demo Ward", "created_at": iso(created), "closed_at": iso(closed), "closed_by_hash": "demo0001",
+            "status": "closed", "closure_note": None,
+            "closure_photo_url": f"{self.photo_root}/{e['after']}", "complaint_photo_url": f"{self.photo_root}/{e['before']}",
+            "location_precision": "generated", "closing_basis": "generated",
         }

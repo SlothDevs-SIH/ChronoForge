@@ -1,7 +1,7 @@
 """Run a connector and write its tickets to Parquet in data/warehouse/ (gitignored), plus a drop report.
 Synthetic sources also write truth_<city>.parquet (ground truth, benchmark use only).
 
-Usage (from engine/):   python -m app.ingest mumbai|bengaluru|pune|synthetic|all
+Usage (from engine/):   python -m app.ingest mumbai|bengaluru|pune|synthetic|demo|all
 """
 import json
 import sys
@@ -21,18 +21,17 @@ SOURCES = {
     "bengaluru": lambda: BengaluruSource(DATA / "raw", DATA / "processed" / "bengaluru_ward_name_map.csv"),
     "pune": lambda: SyntheticSource(DATA / "processed" / "synthetic_pune.csv", "pune"),
     "synthetic": lambda: SyntheticSource(DATA / "processed" / "synthetic_city.csv", "synthetic"),
-    "demo": lambda: DemoSource(),   # the labelled demo photo set; own file so it never clobbers Sandbox City
+    "demo": lambda: DemoSource(DATA.parent / "demo" / "photos" / "manifest.json"),
 }
 
 
 def ingest(source: ComplaintSource, out_dir: Path = DATA / "warehouse") -> pd.DataFrame:
     out_dir.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(list(source.tickets()))
-    stem = getattr(source, "file_stem", source.city)
-    df.to_parquet(out_dir / f"tickets_{stem}.parquet", index=False)
+    df.to_parquet(out_dir / f"tickets_{source.city}.parquet", index=False)
     if source.truth:
-        pd.DataFrame(source.truth).to_parquet(out_dir / f"truth_{stem}.parquet", index=False)
-    (out_dir / f"tickets_{stem}.report.json").write_text(
+        pd.DataFrame(source.truth).to_parquet(out_dir / f"truth_{source.city}.parquet", index=False)
+    (out_dir / f"tickets_{source.city}.report.json").write_text(
         json.dumps(dict(source.report), indent=2, sort_keys=True), encoding="utf-8")
     return df
 

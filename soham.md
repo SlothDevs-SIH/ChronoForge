@@ -65,7 +65,9 @@ Numbers and caveats: `data/models/*.metrics.json`.
 4. I did **not** use GEOAI-04's learned model: it detects urban construction change and is not valid evidence for "was this dump site cleared".
 5. **Batch closing is normal in Mumbai** (29% of real tickets share a closing minute with 2+ others of the same officer, often kilometres apart), so it is not a signal and was removed. The proposal's "batch patterns" should not be claimed for Mumbai.
 6. Benchmark v1 (synthetic injection on 1,000 real tickets): symptoms are caught by construction, but **29% of failures have no metadata symptom** and need independent evidence.
-Next: wait for Ayush's backend, integrate, then the frontend. Open: agent cost-versus-accuracy needs his real verifiers.
+Next: finish the integration, then the frontend.
+
+**Integration status (24 Oct):** Ayush's branch (`ayush`) is merged with mine on the local `integration` branch and verified live together. His 96 tests pass; after integration engine 166 and agent 105 pass. Full details, four fixes I made and the risks are in `INTEGRATION.md`. The most important finding: **on ordinary real tickets the agent has almost no evidence** (no photos, no contacts, 0.7% satellite-eligible), so the closed loop is demonstrable only on the demo set, Telegram-registered tickets and the few satellite-eligible tickets. Open decisions are listed at the end of `INTEGRATION.md`.
 
 ### Phase 2: Backend part 1, real data in the API (about 11:30 to 13:30)
 Goal: Ishan sees real tickets on his screen instead of fixtures.
