@@ -1,7 +1,7 @@
 """Run a connector and write its tickets to Parquet in data/warehouse/ (gitignored), plus a drop report.
 Synthetic sources also write truth_<city>.parquet (ground truth, benchmark use only).
 
-Usage (from engine/):   python -m app.ingest mumbai|bengaluru|pune|synthetic|all
+Usage (from engine/):   python -m app.ingest mumbai|bengaluru|pune|synthetic|demo|all
 """
 import json
 import sys
@@ -11,6 +11,7 @@ import pandas as pd
 
 from .connectors.base import ComplaintSource
 from .connectors.bengaluru import BengaluruSource
+from .connectors.demo import DemoSource
 from .connectors.mumbai import MumbaiSource
 from .connectors.synthetic import SyntheticSource
 
@@ -20,6 +21,7 @@ SOURCES = {
     "bengaluru": lambda: BengaluruSource(DATA / "raw", DATA / "processed" / "bengaluru_ward_name_map.csv"),
     "pune": lambda: SyntheticSource(DATA / "processed" / "synthetic_pune.csv", "pune"),
     "synthetic": lambda: SyntheticSource(DATA / "processed" / "synthetic_city.csv", "synthetic"),
+    "demo": lambda: DemoSource(DATA.parent / "demo" / "photos" / "manifest.json"),
 }
 
 
