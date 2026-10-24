@@ -22,7 +22,7 @@
   "satellite_ineligible": {
     "evidence_id": "00000000-0000-4000-8000-000000000004", "ticket_id": "blr-0001", "check": "satellite",
     "verdict": "inconclusive", "likelihood_ratio": 1.0, "confidence": 0.0, "cost": 0,
-    "details": {"eligible": false, "reason": "pothole is below Sentinel-2 10 m resolution; skipped"},
+    "details": {"eligible": false, "reason": "not applicable: pothole is far smaller than one Sentinel-2 pixel (10 m x 10 m), so a satellite cannot confirm it was fixed. Satellite checks cover large-area problems such as waterlogging over hundreds of metres, dump sites, nullah corridors or large encroachment."},
     "created_at": "2024-03-04T07:01:00Z"
   }
 }

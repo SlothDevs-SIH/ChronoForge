@@ -64,15 +64,19 @@ async def run_agent(run_id: str, ticket_id: str, engine: Engine, on_event: OnEve
         emit("tool_result", "check_satellite", "Skipped: not checkable from orbit (cost 0)", spent, st["budget_left"])
 
     steps = 0
-    # The score alone never yields a verdict: at least one independent check must run first.
-    while (not evidence or fusion.is_uncertain(st["posterior"])) and steps < config.MAX_STEPS:
+    # The score alone never yields a verdict: keep checking until at least one INFORMATIVE (non-inconclusive) piece of
+    # evidence exists, or the tools and budget run out. A check that returns "no information" does not count.
+    def informative() -> bool:
+        return any(e["verdict"] != "inconclusive" for e in evidence)
+
+    while (not informative() or fusion.is_uncertain(st["posterior"])) and steps < config.MAX_STEPS:
         tool, note = await choose(st)
         if tool is None:
             break
         steps += 1
         await asyncio.sleep(config.STEP_DELAY_S)
         if tool == "check_photo":
-            ev = tools.stub_photo(ticket_id, prior)
+            ev = tools.stub_photo(ticket_id, prior, score.get("model_version", ""))
         elif tool == "check_satellite":
             ev = await engine.satellite_check(ticket_id)
         elif tool == "ask_citizen":
@@ -87,12 +91,13 @@ async def run_agent(run_id: str, ticket_id: str, engine: Engine, on_event: OnEve
         emit("tool_call", tool, f"{ev['verdict']} (LR {ev['likelihood_ratio']:g}); posterior {st['posterior']:.2f} [{note}]",
              spent, st["budget_left"])
 
-    state = fusion.verdict_state(st["posterior"])
+    state = fusion.verdict_state(st["posterior"]) if informative() else "cannot_tell"
     action = {"likely_not_fixed": "reopen", "cannot_tell": "human_spot_check", "verified_fixed": "none"}[state]
     verdict = {
         "ticket_id": ticket_id, "state": state, "prior": prior, "posterior": st["posterior"],
         "evidence_ids": [e["evidence_id"] for e in evidence], "recommended_action": action,
-        "requires_human": True, "explanation": _explain(score, evidence),
+        "requires_human": True, "explanation": _explain(score, evidence) if informative() else
+        "No independent check produced evidence, so the score alone is not enough to decide.",
     }
     emit("verdict", None, f"{state}, posterior {st['posterior']:.2f}", spent, st["budget_left"])
     return {"verdict": verdict, "evidence": evidence}

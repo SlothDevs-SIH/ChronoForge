@@ -1,5 +1,7 @@
 # Backend A: Engine service (Soham)
 
+> **Status note:** the scorer section below is the original plan. What was actually built, with measured results and the reasons the plan changed, is in `data/README.md` ("Scorer") and `data/models/*.metrics.json`.
+
 Port 8001. Python 3.11, FastAPI. Read `contract/README.md` first.
 Decision points marked **[Qn]** are in `questions.md`. Where I state a lean, it is a recommendation and not a lock.
 

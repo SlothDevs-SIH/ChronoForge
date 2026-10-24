@@ -8,11 +8,19 @@ The JSON files in this folder are the data contract between Engine, Agent and th
 - `GET /tickets?city=&ward=&category=&status=&min_score=&limit=&offset=`: list of `{ticket, score}`, newest first. Pass `status=closed` to list closed tickets (the ones TrueClose checks)
 - `GET /tickets/{id}`, `GET /tickets/{id}/score`
 - `GET /cities`: per-city counts plus `data_quality` and `location_precision` for the city switcher and its badge
-- `POST /satellite/check` with `{ticket_id}`: returns Evidence
+- `POST /satellite/check` with `{ticket_id, cached_only?, refresh?}`: returns Evidence. Real Sentinel-2 check (20 to 40 s live, instant cached). `details.source` is `live`, `cached` or `not_cached`; abstentions and ineligible tickets are `inconclusive` with `details.reason`. Ineligible costs 0; an attempted check costs 3. `details.demo_only` marks synthetic tickets (no weight). Network failures abstain and are never cached
+- `GET /satellite/chip/{ticket_id}/{before|after}.png`: image chips (about 400 m across, site outlined), written by a check. Satellite checks apply to large-area problems only (dump sites, nullah corridors, waterlogging, large encroachment). Potholes and single garbage piles are below the 10 m pixel: `Score.satellite_eligible` is false, `Score.satellite_reason` starts with "not applicable", and the check returns inconclusive at cost 0. Show `satellite_reason` instead of offering the check.
 - `GET /wards/stats?city=&category=&limit=`: per ward and category, `official_rate` (share no longer open), `reopen_rate`, counts, and `honest_rate`
 - `GET /eval/results`, `POST /connectors/{mumbai|bengaluru|pune|synthetic}/sync`, `GET /health` (shows `mode`: `warehouse` or `fixtures`)
 
-Until the Phase 3 scorer exists: every real ticket's score is the neutral baseline (`p_false_closure` 0.5, `model_version` "baseline-no-model", no reasons), `honest_rate` is `null`, and `/satellite/check` returns "inconclusive" with `details.stub=true` for eligible tickets and cost 0 for ineligible ones. The UI should show these honestly, not as results.
+**Reading a score.** `p_false_closure` is the agent's prior. `score.score_type` says what it is, and the UI must show it accordingly:
+- `calibrated_probability`: synthetic cities only (ground truth by construction; clipped to 0.02 to 0.98).
+- `risk_rank_prior`: Bengaluru. A rank mapped into 0.30 to 0.70; `risk_percentile` says where the ticket ranks. NOT a probability.
+- `rule_flags`: Mumbai. 0.5, or about 0.68 when `flags` contains `citizen_image_only`. NOT a probability.
+- `baseline`: no model applies (open tickets, older Bengaluru tickets). The neutral 0.5.
+`reasons` (per-ticket TreeSHAP, or the flag) are only filled by `GET /tickets/{id}/score`, not in lists. `GET /tickets?sort=risk` ranks by `p_false_closure`.
+
+`GET /eval/results` now returns `{scorers: {model_name: metrics}, verifiers: [...], verifiers_are_placeholder: true}`. Scorer metrics are real; verifier values stay placeholders until Phase 4. `verifiers` now holds `{satellite: ..., benchmark_v1: ...}` (real metrics with caveats; the benchmark is synthetic injection); `pending` lists what is not measured yet. Still true: `honest_rate` in `/wards/stats` is `null`.
 - Simulated municipal system: `GET /muni/tickets`, `POST /muni/tickets/{id}/reopen`, `POST /muni/tickets/{id}/escalate`
 
 **Agent, port 8002**

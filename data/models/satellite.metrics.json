@@ -1,0 +1,97 @@
+{
+  "what": "satellite verifier validation: placebo (no repair claimed) and injected-change sensitivity",
+  "WARNING": "There are no real repair labels, so this does NOT show the verifier finds real repairs. It shows how it behaves when nothing is claimed (placebo) and how large a change must be to be seen (power).",
+  "n_requested": 90,
+  "n_measured": 23,
+  "n_abstained": 67,
+  "abstention_rate": 0.744,
+  "abstention_reasons": {
+    "error: RasterioIOError: Read failed. See previous exception for details.": 23,
+    "the site is cloud-obscured in every nearby before or after scene": 44
+  },
+  "seconds_total": 2678.2,
+  "seconds_per_check_median": 18.9,
+  "placebo": {
+    "detect_threshold_percentile": 0.9,
+    "expected_detection_rate": 0.1,
+    "observed_detection_rate": 0.13,
+    "observed_ci95": [
+      0.028,
+      0.336
+    ],
+    "mean_percentile": 0.564,
+    "expected_mean_percentile": 0.5,
+    "ks_vs_uniform_pvalue": 0.3998,
+    "sigma_floor_binding_share": 0.076,
+    "typical_control_sigma_index_units": {
+      "ndvi": 0.0288,
+      "ndbi": 0.0209,
+      "ndwi": 0.0225,
+      "bright": 0.01
+    }
+  },
+  "power": [
+    {
+      "injected_change_in_control_sigmas": 0,
+      "detection_rate": 0.13,
+      "n": 115
+    },
+    {
+      "injected_change_in_control_sigmas": 0.5,
+      "detection_rate": 0.174,
+      "n": 115
+    },
+    {
+      "injected_change_in_control_sigmas": 1,
+      "detection_rate": 0.235,
+      "n": 115
+    },
+    {
+      "injected_change_in_control_sigmas": 1.5,
+      "detection_rate": 0.4,
+      "n": 115
+    },
+    {
+      "injected_change_in_control_sigmas": 2,
+      "detection_rate": 0.652,
+      "n": 115
+    },
+    {
+      "injected_change_in_control_sigmas": 3,
+      "detection_rate": 0.948,
+      "n": 115
+    },
+    {
+      "injected_change_in_control_sigmas": 4,
+      "detection_rate": 1.0,
+      "n": 115
+    },
+    {
+      "injected_change_in_control_sigmas": 6,
+      "detection_rate": 1.0,
+      "n": 115
+    }
+  ],
+  "caveat": "Random locations can contain real unrelated change (construction, vegetation), so the placebo detection rate is an upper bound on the false-alarm rate for 'no repair'.",
+  "outcome_split": {
+    "requested": 90,
+    "measured": 23,
+    "cloud_obscured": 44,
+    "network_read_errors": 23,
+    "share_measured": 0.256,
+    "share_cloud": 0.489,
+    "share_read_errors": 0.256,
+    "among_runs_without_a_read_error": {
+      "n": 67,
+      "measured": 0.343,
+      "cloud_obscured": 0.657
+    },
+    "reading": "About two thirds of attempts on real ticket dates (April to August, so mostly monsoon) were cloud-obscured: a real limit of optical satellites in Mumbai. The read errors were ours: this run let three checks read six bands each in parallel and a quarter failed. The reader was fixed afterwards (a global cap of 6 simultaneous reads, 6 retries with backoff, a window-level retry, and failures are no longer cached); this run was NOT repeated, so the placebo below rests on only 23 measured locations."
+  },
+  "limits_of_this_validation": [
+    "Only 23 locations were measured, so the placebo and power estimates have wide intervals (placebo detection 13%, 95% CI 3% to 34%).",
+    "The injected-change power curve adds a known shift to the site's index differences; it shows sensitivity, not that real repairs look like that.",
+    "No real repair outcomes exist, so the likelihood ratios are not validated against real fixes.",
+    "Run before the reader fix and before the wording-based eligibility rule; the placebo samples all exact-location Mumbai points, not only large-area problems."
+  ]
+}

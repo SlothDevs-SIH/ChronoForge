@@ -5,10 +5,12 @@ falls back to the contract fixtures. GET /health says which mode is active.
 
 Run: uvicorn app.main:app --port 8001 --reload   (from engine/)
 """
-from typing import Optional
+import re
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from .models import Evidence, MuniActionResult, SatelliteCheckRequest, Score, Ticket, TicketWithScore
 from .store import store
@@ -44,10 +46,12 @@ def list_tickets(
     min_score: float = 0.0,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
+    sort: Literal["newest", "risk"] = "newest",
 ) -> list[TicketWithScore]:
-    """Newest first. Until the Phase 3 scorer exists every real ticket carries the 0.5 baseline prior."""
+    """sort=newest (default) or sort=risk (highest p_false_closure first). Read score.score_type before treating
+    p_false_closure as a probability: only the synthetic cities are calibrated; Bengaluru and Mumbai are bounded priors."""
     return store.list_tickets(city=city, ward=ward, category=category, status=status, min_score=min_score,
-                              limit=limit, offset=offset)
+                              limit=limit, offset=offset, sort=sort)
 
 
 @app.get("/tickets/{ticket_id}", response_model=Ticket)
@@ -63,10 +67,23 @@ def get_score(ticket_id: str) -> Score:
 
 @app.post("/satellite/check", response_model=Evidence)
 def satellite_check(req: SatelliteCheckRequest) -> Evidence:
-    """Eligibility is real (category and location precision). The change measurement is a STUB until Phase 4:
-    eligible tickets return inconclusive with details.stub=true. Ineligible ones return inconclusive at cost 0."""
+    """Real Sentinel-2 check. Ineligible tickets (wrong category, no exact point, no closing date) return inconclusive at
+    cost 0. Eligible ones read imagery live (10 to 60 s) or from the cache; cached_only=true never reads live and answers
+    instantly. details.source says "live" or "cached". Cloud, missing scenes and read errors abstain (inconclusive)."""
     _ticket(req.ticket_id)
-    return store.satellite_evidence(req.ticket_id)
+    return store.satellite_evidence(req.ticket_id, cached_only=req.cached_only, refresh=req.refresh)
+
+
+@app.get("/satellite/chip/{ticket_id}/{which}.png")
+def satellite_chip(ticket_id: str, which: Literal["before", "after"]):
+    """Before/after image chip (about 400 m across, site window outlined) written by a live or cached check."""
+    from .satellite import verifier
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]{1,80}", ticket_id):
+        raise HTTPException(404, "no such chip")
+    path = verifier.chip_path(ticket_id, which)
+    if not path.exists():
+        raise HTTPException(404, "no chip for this ticket yet: run /satellite/check first")
+    return FileResponse(path, media_type="image/png")
 
 
 @app.get("/wards/stats")

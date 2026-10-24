@@ -1,5 +1,5 @@
 """Pydantic models. These mirror the JSON contract in contract/ (see contract/README.md)."""
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel
 
@@ -31,8 +31,8 @@ class Ticket(BaseModel):
 
 class Reason(BaseModel):
     feature: str
-    value: float
-    shap: float
+    value: Union[float, str, None] = None   # categorical features carry their text value
+    shap: Optional[float] = None            # log-odds contribution (TreeSHAP, or ln(odds ratio) for a rule flag)
 
 
 class Score(BaseModel):
@@ -42,6 +42,15 @@ class Score(BaseModel):
     reasons: list[Reason]
     eligible_checks: list[str]
     satellite_eligible: bool
+    satellite_reason: Optional[str] = None   # why the satellite check applies or is "not applicable"; shown on the website
+    # How to read p_false_closure:
+    #   calibrated_probability  synthetic cities only (ground truth by construction)
+    #   risk_rank_prior         Bengaluru: a rank mapped into [0.30, 0.70]; NOT a probability
+    #   rule_flags              Mumbai: 0.5, or a measured-odds-ratio nudge when a flag fires; NOT a probability
+    #   baseline                no model applies (open tickets, older Bengaluru tickets): the neutral 0.5
+    score_type: Literal["baseline", "risk_rank_prior", "rule_flags", "calibrated_probability"] = "baseline"
+    risk_percentile: Optional[float] = None
+    flags: list[str] = []
 
 
 class Evidence(BaseModel):
@@ -63,6 +72,8 @@ class TicketWithScore(BaseModel):
 
 class SatelliteCheckRequest(BaseModel):
     ticket_id: str
+    cached_only: bool = False   # never read live imagery; answer from the cache or abstain (instant)
+    refresh: bool = False       # ignore the cache and measure again
 
 
 class MuniActionResult(BaseModel):

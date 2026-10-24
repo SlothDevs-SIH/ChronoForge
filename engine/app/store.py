@@ -17,8 +17,9 @@ from typing import Any, Optional
 import duckdb
 
 from .eligibility import satellite_eligibility
-from .models import Evidence, Score, Ticket, TicketWithScore
-from .scoring import baseline_score
+from .models import Evidence, Reason, Score, Ticket, TicketWithScore
+from .scoring import baseline_score, from_row
+from .scorer import runtime
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_DIR = Path(os.environ.get("CONTRACT_DIR", ROOT / "contract"))
@@ -37,6 +38,30 @@ def _load(name: str):
     return json.loads((CONTRACT_DIR / name).read_text(encoding="utf-8"))
 
 
+VERIFIER_METRICS = ("satellite", "benchmark_v1")
+
+
+def _all_metrics() -> dict:
+    """Real evaluation metrics written by the training and validation scripts, keyed by file name."""
+    out = {}
+    for f in sorted(runtime.MODELS.glob("*.metrics.json")) if runtime.MODELS.exists() else []:
+        out[f.name.removesuffix(".metrics.json")] = json.loads(f.read_text(encoding="utf-8"))
+    return out
+
+
+def _eval_payload() -> dict:
+    base, found = _load("eval_results.json"), _all_metrics()
+    scorers = {k: v for k, v in found.items() if k not in VERIFIER_METRICS}
+    verifiers = {k: found[k] for k in VERIFIER_METRICS if k in found}
+    return {"is_placeholder": not scorers and not verifiers,
+            "scorers": scorers,
+            "verifiers": verifiers if verifiers else base.get("verifiers", []),
+            "verifiers_are_placeholder": len(verifiers) < len(VERIFIER_METRICS),
+            "pending": ["agent cost versus accuracy (needs the Agent service's real verifiers)",
+                        "photo content checks (need the demo photo set)"],
+            "note": "scorers and verifiers hold real metrics with their own caveats; benchmark numbers are synthetic injection."}
+
+
 def _inconclusive(ticket_id: str, cost: int, details: dict[str, Any]) -> Evidence:
     return Evidence(evidence_id=str(uuid.uuid4()), ticket_id=ticket_id, check="satellite", verdict="inconclusive",
                     likelihood_ratio=1.0, confidence=0.0, cost=cost, details=details, created_at=_now())
@@ -53,7 +78,7 @@ class WarehouseStore:
         self._con = duckdb.connect()
         self._con.execute("create table status_overrides (ticket_id varchar primary key, status varchar)")
         self._build()
-        self.eval_results: dict = _load("eval_results.json")
+        self.eval_results = _eval_payload()
 
     def _build(self) -> None:
         files = sorted(str(f) for f in self._dir.glob("tickets_*.parquet"))
@@ -64,6 +89,19 @@ class WarehouseStore:
         self._con.execute("create table tickets as select * from read_parquet(?, union_by_name=true)", [files])
         self._con.execute("create view v as select t.* replace (coalesce(o.status, t.status) as status) "
                           "from tickets t left join status_overrides o on o.ticket_id = t.ticket_id")
+        self._con.execute("drop view if exists vs")
+        self._con.execute("drop table if exists scores")
+        score_files = sorted(str(f) for f in self._dir.glob("scores_*.parquet"))
+        if score_files:
+            self._con.execute("create table scores as select ticket_id, p_false_closure, score_type, risk_percentile, "
+                              "model_version, flags from read_parquet(?, union_by_name=true)", [score_files])
+        else:
+            self._con.execute("create table scores (ticket_id varchar, p_false_closure double, score_type varchar, "
+                              "risk_percentile double, model_version varchar, flags varchar)")
+        # tickets of a not-yet-scored kind get NULL score columns and fall back to the neutral baseline
+        self._con.execute("create view vs as select v.*, s.p_false_closure as _p, s.score_type as _score_type, "
+                          "s.risk_percentile as _pct, s.model_version as _mv, s.flags as _flags "
+                          "from v left join scores s on s.ticket_id = v.ticket_id")
 
     def _rows(self, sql: str, params: Optional[list] = None) -> list[dict[str, Any]]:
         with self._lock:
@@ -73,23 +111,27 @@ class WarehouseStore:
             return [dict(zip(names, r)) for r in cur.fetchall()]
 
     # ---- tickets ----
-    def list_tickets(self, *, city=None, ward=None, category=None, status=None, min_score=0.0, limit=100, offset=0
-                     ) -> list[TicketWithScore]:
-        if min_score > baseline_score("x", "other", None).p_false_closure:
-            return []  # the baseline prior is the only score until the Phase 3 scorer exists
+    _SCORE_COLS = "_p, _score_type, _pct, _mv, _flags"
+
+    def list_tickets(self, *, city=None, ward=None, category=None, status=None, min_score=0.0, limit=100, offset=0,
+                     sort="newest") -> list[TicketWithScore]:
         where, params = [], []
         for col, val in (("city", city), ("ward", ward), ("category", category), ("status", status)):
             if val:
                 where.append(f"{col} = ?")
                 params.append(val)
-        sql = f"select {', '.join(TICKET_COLUMNS)} from v"
+        if min_score > 0:
+            where.append("coalesce(_p, 0.5) >= ?")
+            params.append(min_score)
+        sql = f"select {', '.join(TICKET_COLUMNS)}, {self._SCORE_COLS} from vs"
         if where:
             sql += " where " + " and ".join(where)
-        sql += " order by created_at desc, ticket_id limit ? offset ?"
+        order = "coalesce(_p, 0.5) desc, created_at desc" if sort == "risk" else "created_at desc"
+        sql += f" order by {order}, ticket_id limit ? offset ?"
         out = []
         for row in self._rows(sql, params + [limit, offset]):
-            t = Ticket(**row)
-            out.append(TicketWithScore(ticket=t, score=baseline_score(t.ticket_id, t.category, t.location_precision)))
+            t = Ticket(**{k: row[k] for k in TICKET_COLUMNS})
+            out.append(TicketWithScore(ticket=t, score=from_row(t, row)))  # reasons are only computed by /score
         return out
 
     def get_ticket(self, ticket_id: str) -> Optional[Ticket]:
@@ -97,17 +139,18 @@ class WarehouseStore:
         return Ticket(**rows[0]) if rows else None
 
     def get_score(self, ticket_id: str) -> Optional[Score]:
-        t = self.get_ticket(ticket_id)
-        return baseline_score(t.ticket_id, t.category, t.location_precision) if t else None
+        rows = self._rows(f"select {', '.join(TICKET_COLUMNS)}, {self._SCORE_COLS} from vs where ticket_id = ?", [ticket_id])
+        if not rows:
+            return None
+        t = Ticket(**{k: rows[0][k] for k in TICKET_COLUMNS})
+        score = from_row(t, rows[0])
+        score.reasons = [Reason(**r) for r in runtime.reasons(t.ticket_id, t.city, rows[0]["_mv"], rows[0]["_flags"] or "", self._dir)]
+        return score
 
-    def satellite_evidence(self, ticket_id: str) -> Evidence:
+    def satellite_evidence(self, ticket_id: str, cached_only: bool = False, refresh: bool = False) -> Evidence:
+        from .satellite import verifier  # lazy: pulls in rasterio and pystac-client
         t = self.get_ticket(ticket_id)
-        ok, reason = satellite_eligibility(t.category, t.location_precision)
-        if not ok:
-            return _inconclusive(ticket_id, 0, {"eligible": False, "reason": reason})
-        # Eligible, but the verifier is Phase 4. Say so instead of inventing a result.
-        return _inconclusive(ticket_id, 3, {"eligible": True, "stub": True,
-                                            "reason": "satellite verifier not built yet; no change measured"})
+        return Evidence(**verifier.check_ticket(t.model_dump(), cached_only=cached_only, refresh=refresh))
 
     def set_status(self, ticket_id: str, status: str) -> None:
         with self._lock:
@@ -164,8 +207,8 @@ class FixtureStore:
         self.eval_results: dict = _load("eval_results.json")
         self._evidence: dict = _load("evidence.json")
 
-    def list_tickets(self, *, city=None, ward=None, category=None, status=None, min_score=0.0, limit=100, offset=0
-                     ) -> list[TicketWithScore]:
+    def list_tickets(self, *, city=None, ward=None, category=None, status=None, min_score=0.0, limit=100, offset=0,
+                     sort="newest") -> list[TicketWithScore]:
         out = []
         for t in self.tickets.values():
             s = self.scores[t.ticket_id]
@@ -182,7 +225,7 @@ class FixtureStore:
     def get_score(self, ticket_id: str) -> Optional[Score]:
         return self.scores.get(ticket_id)
 
-    def satellite_evidence(self, ticket_id: str) -> Evidence:
+    def satellite_evidence(self, ticket_id: str, cached_only: bool = False, refresh: bool = False) -> Evidence:
         key = "satellite" if self.scores[ticket_id].satellite_eligible else "satellite_ineligible"
         ev = dict(self._evidence[key])
         ev.update(ticket_id=ticket_id, evidence_id=str(uuid.uuid4()), created_at=_now())

@@ -129,7 +129,7 @@ class PhotoRequest(BaseModel):
 async def evidence_photo(req: PhotoRequest) -> dict:
     """STUB. AYUSH: imagehash + EXIF + CLIP."""
     score = await get_engine().get_score(req.ticket_id)
-    return tools.stub_photo(req.ticket_id, score["p_false_closure"])
+    return tools.stub_photo(req.ticket_id, score["p_false_closure"], score.get("model_version", ""))
 
 
 class CitizenSend(BaseModel):

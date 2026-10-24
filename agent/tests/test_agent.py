@@ -12,12 +12,12 @@ from app.audit import AuditLog
 
 
 class FakeEngine:
-    def __init__(self, prior=0.82, sat=False):
-        self.prior, self.sat = prior, sat
+    def __init__(self, prior=0.82, sat=False, version="fixture-v0"):
+        self.prior, self.sat, self.version = prior, sat, version
         self.reopened = []
 
     async def get_score(self, tid):
-        return {"ticket_id": tid, "p_false_closure": self.prior, "satellite_eligible": self.sat,
+        return {"ticket_id": tid, "p_false_closure": self.prior, "satellite_eligible": self.sat, "model_version": self.version,
                 "reasons": [{"feature": "time_to_close_h", "value": 0.07, "shap": 0.3}]}
 
     async def satellite_check(self, tid):
@@ -91,11 +91,14 @@ def test_stops_early_when_confident():
     assert sum(1 for e in events if e["type"] == "tool_call" and e["tool"] != "get_score") == 1
 
 
-def test_stubs_never_produce_a_verdict_on_a_neutral_prior():
-    # real tickets before the scorer exists have prior 0.5; the stub photo/citizen checks carry no information
-    out, _ = run(FakeEngine(prior=0.5, sat=False))
-    assert out["verdict"]["state"] == "cannot_tell"
-    assert all(e["details"].get("stub") for e in out["evidence"])
+@pytest.mark.parametrize("prior,version", [(0.5, "baseline-no-model"), (0.678, "mum-flags-v1"), (0.7, "blr-reopen-v1"), (0.98, "syn-truth-v1")])
+def test_stubs_never_produce_a_verdict_on_a_real_ticket(prior, version):
+    # only the six contract fixtures (fixture-v0) get a leaning stub; every real model version gets "no information",
+    # and a score alone, however extreme, never yields a verdict without informative evidence
+    out, _ = run(FakeEngine(prior=prior, sat=False, version=version))
+    assert all(e["details"].get("stub") and e["verdict"] == "inconclusive" for e in out["evidence"])
+    assert out["verdict"]["state"] == "cannot_tell" and out["verdict"]["recommended_action"] == "human_spot_check"
+    assert "score alone" in out["verdict"]["explanation"]
 
 
 # ---- service flow ----

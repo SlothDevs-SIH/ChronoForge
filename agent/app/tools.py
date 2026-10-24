@@ -62,11 +62,11 @@ def _evidence(ticket_id: str, check: str, verdict: str, lr: float, conf: float, 
     }
 
 
-def stub_photo(ticket_id: str, prior: float) -> dict[str, Any]:
-    """STUB: plumbing only, not a real check. With the neutral baseline prior (0.5, real tickets before the scorer
-    exists) it returns NO information: a stub must never produce a verdict on a real ticket. For fixture tickets it
-    leans with the prior so the demo UI has variety."""
-    if abs(prior - 0.5) < 1e-9:
+def stub_photo(ticket_id: str, prior: float, model_version: str = "") -> dict[str, Any]:
+    """STUB: plumbing only, not a real check. It must never produce a verdict on a real ticket, so it returns NO
+    information unless the ticket is one of the six contract fixtures (model_version "fixture-v0"), where it leans
+    with the prior so the demo UI has variety."""
+    if model_version != "fixture-v0":
         return _evidence(ticket_id, "photo", "inconclusive", 1.0, 0.0, 1, {"stub": True, "reason": "photo verifier not built yet"})
     if prior >= 0.7:
         return _evidence(ticket_id, "photo", "contradicts_fix", 8.0, 0.5, 1, {"stub": True})

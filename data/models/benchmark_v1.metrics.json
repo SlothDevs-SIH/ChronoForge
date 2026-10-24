@@ -1,0 +1,106 @@
+{
+  "name": "benchmark_v1",
+  "WARNING": "SYNTHETIC INJECTION on real base tickets. Injected symptoms are caught by construction; read the share of failures with no symptom and the natural flag rates instead.",
+  "base": "1,000 real closed Mumbai tickets (exact location), seed 7",
+  "failure_rate_injected": 0.3,
+  "injection_probabilities": {
+    "fast_close": 0.4,
+    "photo_reuse": 0.35,
+    "wrong_location": 0.3
+  },
+  "detector_thresholds": {
+    "fast_close_minutes": 10,
+    "wrong_location_m": 300.0,
+    "photo_reuse": "seen on an earlier closure"
+  },
+  "dropped_symptom": "batch_close: normal in real Mumbai data (see natural_flag_rates_real_data), so it is neither injected nor detected",
+  "results": {
+    "n": 1000,
+    "failures": 300,
+    "clean": 700,
+    "per_symptom": {
+      "fast_close": {
+        "injected": 124,
+        "caught": 124,
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9707,
+          1.0
+        ],
+        "false_alarms_on_clean": 1,
+        "false_alarm_rate_on_clean": 0.0014,
+        "false_alarm_ci95": [
+          0.0,
+          0.0079
+        ],
+        "precision_vs_all_clean_and_failures": 0.992
+      },
+      "photo_reuse": {
+        "injected": 94,
+        "caught": 94,
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9615,
+          1.0
+        ],
+        "false_alarms_on_clean": 0,
+        "false_alarm_rate_on_clean": 0.0,
+        "false_alarm_ci95": [
+          0.0,
+          0.0053
+        ],
+        "precision_vs_all_clean_and_failures": 1.0
+      },
+      "wrong_location": {
+        "injected": 86,
+        "caught": 56,
+        "recall": 0.651,
+        "recall_ci95": [
+          0.5408,
+          0.7508
+        ],
+        "false_alarms_on_clean": 4,
+        "false_alarm_rate_on_clean": 0.0057,
+        "false_alarm_ci95": [
+          0.0016,
+          0.0146
+        ],
+        "precision_vs_all_clean_and_failures": 0.889
+      }
+    },
+    "any_symptom_check": {
+      "failures_flagged": 200,
+      "recall": 0.667,
+      "clean_flagged": 5,
+      "false_alarm_rate_on_clean": 0.0071
+    },
+    "failures_with_no_symptom": {
+      "count": 86,
+      "share_of_failures": 0.287,
+      "meaning": "closed with no observable metadata symptom: only independent evidence (satellite, photo content, citizen, human) can catch these"
+    },
+    "symptomatic_failures": 214,
+    "natural_flag_rates_real_data": {
+      "n_real_closed_tickets": 58347,
+      "fast_close_under_10_min": {
+        "count": 52,
+        "rate": 0.00089,
+        "ci95": [
+          0.0007,
+          0.0012
+        ],
+        "reading": "rare, so a closure within 10 minutes of filing is a usable (weak) symptom"
+      },
+      "same_officer_same_minute_clusters": {
+        "tickets_in_clusters_of_3_plus": 16835,
+        "share_of_real_tickets": 0.2885,
+        "median_cluster_spread_m": 1319.0,
+        "share_in_clusters_spanning_1km_or_more": 0.1786,
+        "share_in_clusters_spanning_3km_or_more": 0.0522,
+        "reading": "NORMAL in this data, even across kilometres (bulk or desk closing): batch closing carries no signal and is NOT used."
+      },
+      "note": "photo_reuse and wrong_location cannot be measured on real data: it has no photos or photo GPS."
+    }
+  },
+  "pending": "Agent cost-versus-accuracy ('run everything' vs the budgeted agent) needs Ayush's real verifiers; photo content checks need the demo photo set."
+}
