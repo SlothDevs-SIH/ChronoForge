@@ -46,6 +46,8 @@ Goal: real complaint data on my laptop and a list of its columns.
 
 Done when: columns are posted, one real file loads, and the synthetic generator makes 1,000 tickets.
 
+**Phase 2 status:** the connector interface and the Mumbai connector are built and tested (28 engine tests pass). Still to do: Bengaluru connector, synthetic connector (Pune, Sandbox), DuckDB store, and switching the API from fixtures to the real tickets. See `data/README.md`.
+
 ### Phase 2: Backend part 1, real data in the API (about 11:30 to 13:30)
 Goal: Ishan sees real tickets on his screen instead of fixtures.
 

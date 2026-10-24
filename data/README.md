@@ -48,6 +48,16 @@ Source: BMC "MARG" public map service, `https://marg.mcgm.gov.in/server/rest/ser
 5. Image columns hold file names only (we cannot fetch images). `AFTER_IMAGE` listing only "Initial Image By Citizen.jpg" on a closed, valid ticket means no attended photo was uploaded: **383 such tickets** (0.6%). 57,118 closed valid tickets do have an "Attended" image. A real, rare closure-integrity signal.
 6. The live service keeps changing; our snapshot is dated 24 Oct 2026.
 
+### Mumbai connector (Phase 2, built)
+Code: `engine/app/connectors/mumbai.py` (interface in `base.py`), run with `cd engine && python -m app.ingest mumbai`. Writes `data/warehouse/tickets_mumbai.parquet` (gitignored) and a drop report. Tests: `engine/tests/test_mumbai_connector.py` (use small built-in fixtures, no raw data needed).
+- **Result on our snapshot:** 121,341 rows read, **77,338 kept**: 60,029 closed, 17,283 open, 26 reopened. Dropped: discarded 14,997; invalid 27,978; outside Mumbai 475; placeholder location 518; closed before created 5; closed without time 22; missing ward 7; missing coordinates 1. (Most of the 15,526 placeholder-location rows were already invalid or discarded, hence only 518 under that reason.)
+- **Categories** (by complaint name, not type): other 38,642; garbage 14,082; drain 11,356; pothole 10,924 (includes road re-surfacing, since the contract has no separate road-repair category); water leak 1,461; streetlight 873. "Encroachment ... footpath / drains" is deliberately `other`, not drain.
+- **Pothole layer** enriches matching tickets (real resolved date, post-work photo flag, reopen) instead of adding duplicate rows; 10 pothole-only rows are added.
+- **Reopen:** 26 reopened tickets, all potholes. A reopened ticket is usually no longer "Resolved", so reopen is read independently of the closed status.
+- **Extra signal columns** beyond the contract: `has_attended_image`, `citizen_image_only` (369 closed tickets after drops), `escalated`, `channel`, `closing_basis`, `res_hours`, `zone`, `complaint_type`, `from_pothole_layer`.
+- **Known quirk:** 432 groups of 5 or more identical complaints in the same 100 m cell on the same day. Could be bulk filing or duplicates. Matters for any repeat-complaint feature.
+- `lang` is `other` (the language field was not downloaded), `text` is the complaint name (free text deliberately not fetched), `closure_photo_url` is empty (file names only).
+
 ## Bengaluru
 Source: OpenCity, https://data.opencity.in/dataset/bbmp-grievances-data (public domain, one CSV per year).
 - Columns: `Complaint ID, Category, Sub Category, Grievance Date, Ward Name, Grievance Status, Staff Remarks, Staff Name`.
