@@ -1,0 +1,104 @@
+"""Module 4: approvals and actions. propose_action only ever creates a pending row; nothing is
+reopened or escalated without a human decision."""
+import json
+import threading
+from uuid import uuid4
+
+import httpx
+
+from . import audit, config
+from .db import get_conn, lock
+from .models import Verdict, now_iso
+
+ACTIONS = {"reopen", "escalate"}
+
+
+def propose_action(ticket_id: str, run_id: str | None, action: str, verdict: Verdict) -> dict:
+    if action not in ACTIONS:
+        raise ValueError(f"unknown action {action}")
+    approval_id = str(uuid4())
+    with lock():
+        get_conn().execute(
+            "INSERT INTO approvals (approval_id, ticket_id, run_id, action, verdict_snapshot, status, created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (approval_id, ticket_id, run_id, action, verdict.model_dump_json(), "pending", now_iso()))
+        get_conn().commit()
+    audit.append("approval_proposed", {"approval_id": approval_id, "ticket_id": ticket_id, "action": action})
+    return get(approval_id)
+
+
+def _row(r) -> dict:
+    return {"approval_id": r["approval_id"], "ticket_id": r["ticket_id"], "run_id": r["run_id"],
+            "action": r["action"], "verdict_snapshot": json.loads(r["verdict_snapshot"]),
+            "status": r["status"], "note": r["note"],
+            "engine_result": json.loads(r["engine_result"]) if r["engine_result"] else None,
+            "created_at": r["created_at"], "decided_at": r["decided_at"]}
+
+
+def get(approval_id: str) -> dict | None:
+    r = get_conn().execute("SELECT * FROM approvals WHERE approval_id=?", (approval_id,)).fetchone()
+    return _row(r) if r else None
+
+
+def list_approvals(status: str | None = "pending") -> list[dict]:
+    q, args = "SELECT * FROM approvals", ()
+    if status:
+        q, args = q + " WHERE status=?", (status,)
+    return [_row(r) for r in get_conn().execute(q + " ORDER BY created_at", args).fetchall()]
+
+
+def _call_engine(action: str, ticket_id: str) -> dict:
+    try:
+        r = httpx.post(f"{config.ENGINE_URL}/muni/tickets/{ticket_id}/{action}", timeout=5)
+        r.raise_for_status()
+        return {"ok": True, "response": r.json()}
+    except Exception as exc:
+        return {"ok": False, "error": f"engine call failed: {exc}"}
+
+
+def decide(approval_id: str, decision: str, note: str = "") -> dict:
+    a = get(approval_id)
+    if a is None:
+        raise KeyError(approval_id)
+    if a["status"] != "pending":
+        raise ValueError(f"approval already {a['status']}")
+    engine_result = None
+    if decision == "approve":
+        engine_result = _call_engine(a["action"], a["ticket_id"])
+    status = "approved" if decision == "approve" else "rejected"
+    with lock():
+        get_conn().execute("UPDATE approvals SET status=?, note=?, engine_result=?, decided_at=? WHERE approval_id=?",
+                           (status, note, json.dumps(engine_result) if engine_result else None, now_iso(), approval_id))
+        get_conn().commit()
+    audit.append("approval_decided", {"approval_id": approval_id, "ticket_id": a["ticket_id"],
+                                      "decision": decision, "note": note})
+    if decision == "approve":
+        _record_prediction(a)
+        if config.OUTCOME_CHECK_DELAY > 0:
+            threading.Timer(config.OUTCOME_CHECK_DELAY, run_outcome_check, args=(approval_id,)).start()
+    return get(approval_id)
+
+
+def _record_prediction(a: dict) -> None:
+    with lock():
+        get_conn().execute("INSERT INTO outcomes (approval_id, ticket_id, predicted, created_at) VALUES (?,?,?,?)",
+                           (a["approval_id"], a["ticket_id"], a["verdict_snapshot"]["state"], now_iso()))
+        get_conn().commit()
+
+
+def run_outcome_check(approval_id: str) -> dict:
+    """Outcome verification: re-run the agent on the ticket and record predicted vs observed."""
+    from . import agent  # local import: agent imports this module
+    a = get(approval_id)
+    run_id = agent.start_run(a["ticket_id"])
+    verdict = agent.execute(run_id, delay=0)
+    observed = {"rerun_state": verdict.state, "rerun_posterior": verdict.posterior, "run_id": run_id}
+    with lock():
+        get_conn().execute("UPDATE outcomes SET observed=? WHERE approval_id=?", (json.dumps(observed), approval_id))
+        get_conn().commit()
+    audit.append("outcome_check", {"approval_id": approval_id, "ticket_id": a["ticket_id"], **observed})
+    return observed
+
+
+def outcomes() -> list[dict]:
+    return [dict(r) for r in get_conn().execute("SELECT * FROM outcomes ORDER BY outcome_id").fetchall()]

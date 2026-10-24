@@ -1,0 +1,21 @@
+{
+  "evidence_id": "00000000-0000-4000-8000-000000000001",
+  "ticket_id": "bbmp-2024-0001234",
+  "check": "photo",
+  "verdict": "contradicts_fix",
+  "likelihood_ratio": 8.0,
+  "confidence": 0.9,
+  "cost": 1,
+  "details": {
+    "flags": [
+      "duplicate"
+    ],
+    "checks": {
+      "duplicate": {
+        "nearest_ticket": "bbmp-2024-0000777",
+        "hamming": 0
+      }
+    }
+  },
+  "created_at": "2026-10-24T10:30:00Z"
+}

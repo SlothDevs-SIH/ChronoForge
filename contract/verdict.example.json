@@ -1,0 +1,12 @@
+{
+  "ticket_id": "bbmp-2024-0001234",
+  "state": "likely_not_fixed",
+  "prior": 0.71,
+  "posterior": 0.95,
+  "evidence_ids": [
+    "00000000-0000-4000-8000-000000000001"
+  ],
+  "recommended_action": "reopen",
+  "requires_human": true,
+  "explanation": "The closure is probably false. Probability of a false closure moved from 71% to 95%. photo check: contradicts fix (LR 8)."
+}
