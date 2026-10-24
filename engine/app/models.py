@@ -15,9 +15,11 @@ class Ticket(BaseModel):
     category: Category
     text: str
     lang: str
-    lat: float
-    lng: float
-    h3: str
+    # Bengaluru has no exact point: lat/lng are a ward centroid (location_precision="ward_centroid") or None, and h3 is None.
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    h3: Optional[str] = None
+    location_precision: Optional[Literal["exact", "generated", "ward_centroid", "none"]] = None
     ward: str
     created_at: str
     closed_at: Optional[str] = None

@@ -23,6 +23,8 @@ class ComplaintSource(ABC):
 
     def __init__(self) -> None:
         self.report: Counter = Counter()
+        # Ground truth (synthetic sources only), kept apart from tickets so it cannot leak into features.
+        self.truth: list[dict[str, Any]] = []
 
     @abstractmethod
     def fetch(self) -> Iterator[dict[str, Any]]:

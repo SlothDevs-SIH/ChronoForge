@@ -68,6 +68,26 @@ Source: OpenCity, https://data.opencity.in/dataset/bbmp-grievances-data (public 
 - **Ward centroids:** the 2015 ward map (198 wards) matched 98.3% of tickets by name: exact 130 wards, fuzzy 63, manual 3. **Unmapped: Subedarapalya and Someshwara** (Someshwara alone is about 11k tickets). A person should check these two against the ward map before relying on them.
 - Fuzzy matches were spot-checked: weakest pairs look plausible (Ulsoor to Halsoor is Halasuru). Confirm the fuzzy column if ward-level accuracy matters.
 
+### Bengaluru connector (Phase 2, built)
+Code: `engine/app/connectors/bengaluru.py`. Run `cd engine && python -m app.ingest bengaluru` (about 25 s).
+- **Result:** 766,648 rows read, **733,721 kept**: 708,831 closed, 22,191 open, **2,699 reopened** (matches the raw `ReOpen` count). Dropped: Rejected 16,803; Non Relevant 16,050; null status 74. No duplicate ids across the six years.
+- **Status mapping:** Closed and Resolved are closed; ReOpen is reopened; Registered, In Progress and Long Term Solution are open.
+- **Categories:** streetlight 298,547; garbage 204,439; other 169,399; drain 33,061; pothole 28,275. By sub-category: "Street Light Not Working" and day-time/park lights are streetlight (new-light requests are `other`); "Potholes" is pothole; road-side drains, water stagnation and SWD items are drain; solid waste and debris removal are garbage.
+- **Location:** `location_precision` is `ward_centroid` for 721,165 tickets and `none` for 12,556 (Someshwara 10,634; Subedarapalya 1,920; "NON Ward" 2). `h3` is always null and `closed_at` is always null, because the source has neither. These tickets must not feed satellite checks or 100 m repeat features.
+- **Time:** the source dates are naive local time. We treat them as IST and convert to UTC (assumption). Range 7 Feb 2020 to 19 Jun 2025.
+- **Staff:** names are hashed (`closed_by_hash`); the role after "/" is kept as `staff_role` (AEE 473k, JHI 56k, AE 51k, DYRFO 29k, MOH 23k).
+- **Remarks:** on non-open tickets the remark is kept as `closure_note`, with `remark_norm` (lower-cased text) and `remark_blank_like` (2.8% are blank or a single character). Boilerplate dominates: "attended" 301k, "resolved" 97k, "cleared" 42k, "closed" 28k, "clear" 23k.
+- **Data quality:** `partial`.
+
+### Synthetic connector (Phase 2, built)
+Code: `engine/app/connectors/synthetic.py`. Run `python -m app.ingest pune` and `python -m app.ingest synthetic`.
+- Pune: 5,904 tickets. Sandbox City: 5,883 tickets. Every ticket is `data_quality="synthetic"` with `location_precision="generated"`.
+- **Ground truth is separated by construction.** Tickets never carry `gt_*`. Truth goes to `data/warehouse/truth_pune.parquet` and `truth_synthetic.parquet` (1,199 and 1,175 false closures). Only the benchmark may read those files.
+- Extra columns: `closure_photo_id`, `closure_photo_exif_dist_m`.
+
+### All cities at once
+`cd engine && python -m app.ingest all` writes one Parquet file per city to `data/warehouse/` in about 35 seconds. Columns differ slightly between cities (each has its own extras); load with DuckDB `union_by_name`.
+
 ## Pune
 No complaint dataset exists on the PMC open data portal or OpenCity's 40 PMC datasets. The iChangeMyCity archive (Janaagraha, on AWS) is marked deprecated and its bucket denies public listing, so it is **not usable**. PMC Care data is not published.
 What we use instead: real PMC ward polygons (58 wards, 2022 map), real stormwater drain (nalla) lines (3,075 segments), plus complaints we generate. Other real Pune layers downloaded for context: SWD chambers, ward-wise streetlight counts. **Every Pune complaint is synthetic.**

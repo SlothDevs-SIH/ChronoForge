@@ -9,9 +9,11 @@ export interface Ticket {
   category: string;
   text: string;
   lang: string;
-  lat: number;
-  lng: number;
-  h3: string;
+  // Bengaluru has no exact point: ward centroid (location_precision "ward_centroid") or null; h3 is null there.
+  lat: number | null;
+  lng: number | null;
+  h3: string | null;
+  location_precision?: "exact" | "generated" | "ward_centroid" | "none" | null;
   ward: string;
   created_at: string;
   closed_at: string | null;

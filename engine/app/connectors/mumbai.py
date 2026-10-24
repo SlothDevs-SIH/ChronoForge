@@ -145,6 +145,7 @@ class MumbaiSource(ComplaintSource):
             "created_at": created, "closed_at": closed_at, "closed_by_hash": r["GROUND_STAFF"] or r["CO_EMP_ID"] or None,
             "status": status, "closure_note": r["L1_REMARKS"] or r["ATTENDED"] or None, "closure_photo_url": None,
             # extra real signals
+            "location_precision": "exact",
             "complaint_type": r["COMPLAINT_TYPE"], "zone": r["COMPLAINT_ZONE"] or None, "channel": r["COMPLAINT_SOURCE"] or None,
             "escalated": {"YES": True, "NO": False}.get(r["ESCALATED_NEW"]),
             "closing_basis": basis,
@@ -172,6 +173,7 @@ class MumbaiSource(ComplaintSource):
             "closed_by_hash": p["RESOLVED_BY"] or None,
             "status": "reopened" if reopened else ("closed" if closed else "open"),
             "closure_note": None, "closure_photo_url": None,
+            "location_precision": "exact",
             "complaint_type": p["COMPLAINT_TYPE"], "zone": p["ZONE"] or None, "channel": p["COMPLAINT_SOURCE"] if "COMPLAINT_SOURCE" in p else None,
             "escalated": {"YES": True, "NO": False}.get(p["ESCALATED"]),
             "closing_basis": "pothole_resolved_date" if closed else None,

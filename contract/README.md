@@ -19,6 +19,9 @@ The JSON files in this folder are the data contract between Engine, Agent and th
 
 The web app reaches both through the Vite proxy: `/api/engine/*` and `/api/agent/*`.
 
+## Ticket location fields
+`lat`, `lng` and `h3` can be null. `location_precision` says how much to trust them: `exact` (Mumbai), `generated` (synthetic cities), `ward_centroid` (Bengaluru, a ward's centre, h3 is null), `none`. Satellite checks and 100 m repeat features may only use `exact` and `generated`.
+
 ## Fusion rule (Agent and Engine must agree)
 Each Evidence has `likelihood_ratio = P(evidence | not fixed) / P(evidence | fixed)`. Above 1 means "not fixed", below 1 means "fixed", 1 means inconclusive.
 `logit(posterior) = logit(prior) + sum(ln(LR))`. Verdict: `likely_not_fixed` if posterior >= 0.75, `verified_fixed` if <= 0.25, else `cannot_tell`. The score alone never gives a verdict: at least one independent check runs first. Thresholds live in `agent/app/config.py`.
