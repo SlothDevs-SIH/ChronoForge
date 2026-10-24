@@ -1,103 +1,53 @@
-"""Budgeted agent loop.
+"""Deterministic planner and the guard that any planner (including a future LLM one) must pass."""
+from dataclasses import dataclass, field
+from . import config
 
-1. posterior <- engine prior. 2. While no independent evidence exists yet, or the posterior is uncertain, and budget remains: pick the next tool
-(LLM choice if enabled and valid, else the deterministic preference order), run it, fuse its LR.
-3. Threshold into a verdict. The planner never acts: a not-fixed verdict only *recommends* an action,
-and main.py turns that into a human approval item.
-"""
-import asyncio
-from typing import Any, Awaitable, Callable, Optional
+# cheap first; satellite only when eligible; human spot check last (cost 10)
+PREFERENCE = ["check_photo", "ask_citizen", "check_satellite", "request_human_spot_check"]
 
-from . import config, fusion, llm, tools
-from .tools import Engine
-
-ORDER = ["check_photo", "check_satellite", "ask_citizen", "request_human_spot_check"]
-OnEvent = Callable[[dict[str, Any]], None]
+CHECK_OF_TOOL = {"check_photo": "photo", "ask_citizen": "citizen",
+                 "check_satellite": "satellite", "request_human_spot_check": "human"}
 
 
-def eligible(tool: str, st: dict[str, Any]) -> bool:
-    if tool in st["used"] or config.TOOL_COST[tool] > st["budget_left"]:
-        return False
-    if tool == "check_satellite" and not st["satellite_eligible"]:
-        return False
-    return True
+@dataclass
+class PlanState:
+    budget_left: int
+    satellite_eligible: bool
+    used: set[str] = field(default_factory=set)   # tool names already called this run
+    prior: float = 0.5
+    posterior: float = 0.5
+    evidence: list = field(default_factory=list)  # Evidence collected so far
 
 
-def deterministic_choice(st: dict[str, Any]) -> Optional[str]:
-    return next((t for t in ORDER if eligible(t, st)), None)
+def eligible_tools(state: PlanState) -> list[str]:
+    out = []
+    for t in PREFERENCE:
+        if t in state.used:
+            continue
+        if config.TOOL_COSTS[t] > state.budget_left:
+            continue
+        if t == "check_satellite" and not state.satellite_eligible:
+            continue
+        out.append(t)
+    return out
 
 
-async def choose(st: dict[str, Any]) -> tuple[Optional[str], str]:
-    """Returns (tool, note). Invalid or failed LLM answers fall back to the deterministic planner."""
-    try:
-        pick = await llm.choose_tool({k: st[k] for k in ("posterior", "budget_left", "used", "satellite_eligible")})
-    except Exception:
-        pick = None
-    if pick and pick["tool"] in config.TOOL_COST and eligible(pick["tool"], st):
-        return pick["tool"], f"{pick['provider']}: {pick['reason']}"
-    return deterministic_choice(st), "deterministic planner"
+def validate_choice(tool: str, state: PlanState) -> tuple[bool, str]:
+    """Code-level guard: the planner cannot pick an unknown, ineligible, repeated or unaffordable tool."""
+    if tool not in config.TOOL_COSTS or tool in ("get_score", "propose_action"):
+        return False, f"{tool} is not a selectable check"
+    if tool in eligible_tools(state):
+        return True, "ok"
+    if tool in state.used:
+        return False, f"{tool} already used"
+    if config.TOOL_COSTS[tool] > state.budget_left:
+        return False, f"{tool} costs {config.TOOL_COSTS[tool]}, only {state.budget_left} left"
+    return False, f"{tool} is not eligible for this ticket"
 
 
-def _explain(score: dict, evidence: list[dict]) -> str:
-    parts = [f"{r['feature']}={r['value']}" for r in score["reasons"][:2]]
-    parts += [f"{e['check']} check {e['verdict'].replace('_', ' ')}" for e in evidence if e["verdict"] != "inconclusive"]
-    return "Signals: " + "; ".join(parts) if parts else "No decisive signal."
-
-
-async def run_agent(run_id: str, ticket_id: str, engine: Engine, on_event: OnEvent, budget: int = config.BUDGET) -> dict[str, Any]:
-    step = 0
-
-    def emit(type_: str, tool: Optional[str], summary: str, spent: int, left: int) -> None:
-        nonlocal step
-        step += 1
-        on_event({"run_id": run_id, "step": step, "type": type_, "tool": tool, "summary": summary,
-                  "cost_spent": spent, "budget_left": left})
-
-    score = await engine.get_score(ticket_id)
-    prior = score["p_false_closure"]
-    st: dict[str, Any] = {"used": set(), "budget_left": budget, "posterior": prior,
-                          "satellite_eligible": score["satellite_eligible"]}
-    spent, evidence = 0, []
-    emit("tool_call", "get_score", f"Prior false-closure probability {prior:.2f}", spent, st["budget_left"])
-
-    if not score["satellite_eligible"]:
-        emit("tool_result", "check_satellite", "Skipped: not checkable from orbit (cost 0)", spent, st["budget_left"])
-
-    steps = 0
-    # The score alone never yields a verdict: keep checking until at least one INFORMATIVE (non-inconclusive) piece of
-    # evidence exists, or the tools and budget run out. A check that returns "no information" does not count.
-    def informative() -> bool:
-        return any(e["verdict"] != "inconclusive" for e in evidence)
-
-    while (not informative() or fusion.is_uncertain(st["posterior"])) and steps < config.MAX_STEPS:
-        tool, note = await choose(st)
-        if tool is None:
-            break
-        steps += 1
-        await asyncio.sleep(config.STEP_DELAY_S)
-        if tool == "check_photo":
-            ev = tools.stub_photo(ticket_id, prior, score.get("model_version", ""))
-        elif tool == "check_satellite":
-            ev = await engine.satellite_check(ticket_id)
-        elif tool == "ask_citizen":
-            ev = tools.stub_citizen(ticket_id)
-        else:
-            ev = tools.stub_human(ticket_id)
-        evidence.append(ev)
-        st["used"].add(tool)
-        spent += ev["cost"]
-        st["budget_left"] = budget - spent
-        st["posterior"] = fusion.fuse(prior, [e["likelihood_ratio"] for e in evidence])
-        emit("tool_call", tool, f"{ev['verdict']} (LR {ev['likelihood_ratio']:g}); posterior {st['posterior']:.2f} [{note}]",
-             spent, st["budget_left"])
-
-    state = fusion.verdict_state(st["posterior"]) if informative() else "cannot_tell"
-    action = {"likely_not_fixed": "reopen", "cannot_tell": "human_spot_check", "verified_fixed": "none"}[state]
-    verdict = {
-        "ticket_id": ticket_id, "state": state, "prior": prior, "posterior": st["posterior"],
-        "evidence_ids": [e["evidence_id"] for e in evidence], "recommended_action": action,
-        "requires_human": True, "explanation": _explain(score, evidence) if informative() else
-        "No independent check produced evidence, so the score alone is not enough to decide.",
-    }
-    emit("verdict", None, f"{state}, posterior {st['posterior']:.2f}", spent, st["budget_left"])
-    return {"verdict": verdict, "evidence": evidence}
+def choose_next(state: PlanState) -> tuple[str | None, str]:
+    cands = eligible_tools(state)
+    if not cands:
+        return None, "no affordable eligible check remains"
+    tool = cands[0]
+    return tool, f"cheapest eligible check not yet run is {tool} (cost {config.TOOL_COSTS[tool]})"

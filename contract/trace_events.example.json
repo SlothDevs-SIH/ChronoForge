@@ -1,0 +1,62 @@
+[
+  {
+    "run_id": "run-1",
+    "step": 1,
+    "type": "tool_call",
+    "tool": "get_score",
+    "summary": "get_score -> 0.71 (source: engine)",
+    "cost_spent": 0,
+    "budget_left": 10,
+    "ts": "2026-10-24T10:30:00Z"
+  },
+  {
+    "run_id": "run-1",
+    "step": 2,
+    "type": "thought",
+    "tool": null,
+    "summary": "cheapest eligible check not yet run is check_photo (cost 1)",
+    "cost_spent": 0,
+    "budget_left": 10,
+    "ts": "2026-10-24T10:30:00Z"
+  },
+  {
+    "run_id": "run-1",
+    "step": 3,
+    "type": "tool_call",
+    "tool": "check_photo",
+    "summary": "calling check_photo",
+    "cost_spent": 0,
+    "budget_left": 10,
+    "ts": "2026-10-24T10:30:00Z"
+  },
+  {
+    "run_id": "run-1",
+    "step": 4,
+    "type": "tool_result",
+    "tool": "check_photo",
+    "summary": "photo: contradicts fix, LR 8; posterior 0.95",
+    "cost_spent": 1,
+    "budget_left": 9,
+    "ts": "2026-10-24T10:30:00Z"
+  },
+  {
+    "run_id": "run-1",
+    "step": 5,
+    "type": "verdict",
+    "tool": null,
+    "summary": "The closure is probably false. Probability of a false closure moved from 71% to 95%. photo check: contradicts fix (LR 8).",
+    "cost_spent": 1,
+    "budget_left": 9,
+    "ts": "2026-10-24T10:30:00Z"
+  },
+  {
+    "run_id": "run-1",
+    "step": 6,
+    "type": "approval_needed",
+    "tool": "propose_action",
+    "summary": "reopen proposed, awaiting human approval",
+    "cost_spent": 1,
+    "budget_left": 9,
+    "ts": "2026-10-24T10:30:00Z"
+  }
+]

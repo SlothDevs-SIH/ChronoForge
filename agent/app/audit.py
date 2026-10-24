@@ -1,32 +1,44 @@
-"""Append-only, hash-chained audit log. hash = sha256(prev_hash + canonical_json(event))."""
+"""Append-only hash-chained audit log: hash = sha256(prev_hash + canonical_json(event))."""
 import hashlib
 import json
-from datetime import datetime, timezone
-from typing import Any
+from .db import get_conn, lock
+from .models import now_iso
 
 GENESIS = "0" * 64
 
 
-def _digest(prev_hash: str, event: dict[str, Any]) -> str:
-    payload = json.dumps(event, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256((prev_hash + payload).encode("utf-8")).hexdigest()
+def canonical(event: dict) -> str:
+    return json.dumps(event, sort_keys=True, separators=(",", ":"), default=str)
 
 
-class AuditLog:
-    def __init__(self) -> None:
-        self.rows: list[dict[str, Any]] = []
+def _hash(prev: str, event_json: str) -> str:
+    return hashlib.sha256((prev + event_json).encode()).hexdigest()
 
-    def append(self, event: dict[str, Any]) -> dict[str, Any]:
-        prev = self.rows[-1]["hash"] if self.rows else GENESIS
-        event = {**event, "ts": datetime.now(timezone.utc).isoformat()}
-        row = {"idx": len(self.rows), "event": event, "prev_hash": prev, "hash": _digest(prev, event)}
-        self.rows.append(row)
-        return row
 
-    def verify(self) -> dict[str, Any]:
-        prev = GENESIS
-        for row in self.rows:
-            if row["prev_hash"] != prev or row["hash"] != _digest(prev, row["event"]):
-                return {"ok": False, "first_bad_index": row["idx"], "length": len(self.rows)}
-            prev = row["hash"]
-        return {"ok": True, "first_bad_index": None, "length": len(self.rows)}
+def append(event_type: str, payload: dict) -> dict:
+    with lock():
+        c = get_conn()
+        row = c.execute("SELECT hash FROM audit ORDER BY idx DESC LIMIT 1").fetchone()
+        prev = row["hash"] if row else GENESIS
+        ev = canonical({"type": event_type, **payload})
+        h = _hash(prev, ev)
+        ts = now_iso()
+        cur = c.execute("INSERT INTO audit (ts, event, prev_hash, hash) VALUES (?,?,?,?)", (ts, ev, prev, h))
+        c.commit()
+        return {"idx": cur.lastrowid, "ts": ts, "event": json.loads(ev), "prev_hash": prev, "hash": h}
+
+
+def entries(limit: int = 500) -> list[dict]:
+    rows = get_conn().execute("SELECT * FROM audit ORDER BY idx ASC LIMIT ?", (limit,)).fetchall()
+    return [{"idx": r["idx"], "ts": r["ts"], "event": json.loads(r["event"]),
+             "prev_hash": r["prev_hash"], "hash": r["hash"]} for r in rows]
+
+
+def verify() -> dict:
+    prev = GENESIS
+    rows = get_conn().execute("SELECT * FROM audit ORDER BY idx ASC").fetchall()
+    for r in rows:
+        if r["prev_hash"] != prev or _hash(prev, r["event"]) != r["hash"]:
+            return {"ok": False, "first_broken_idx": r["idx"], "length": len(rows)}
+        prev = r["hash"]
+    return {"ok": True, "first_broken_idx": None, "length": len(rows)}

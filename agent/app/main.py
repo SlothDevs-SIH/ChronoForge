@@ -1,210 +1,206 @@
-"""Agent service (port 8002).
-
-Run: uvicorn app.main:app --port 8002 --reload   (from agent/)
-All state is in memory for the skeleton. AYUSH: move runs/approvals to SQLite (SQL files go in agent/sql/).
-"""
+"""Agent service (port 8002). Run: uvicorn app.main:app --port 8002"""
 import asyncio
 import json
-import uuid
-from datetime import datetime, timezone
-from typing import Any, Optional
+import threading
+import time
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
+
 from pydantic import BaseModel
 
-from . import config, planner, tools
-from .audit import AuditLog
+from . import agent, approvals, audit, config, llm, llm_planner, telegram, tools, whatsapp
+from .db import get_conn
+from .models import DecideRequest, PhotoRequest
+from .photo import PhotoIndex, verify_photo
 
-app = FastAPI(title="TrueClose Agent", version="0.1.0")
+app = FastAPI(title="TrueClose Agent service")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-audit = AuditLog()
-runs: dict[str, dict[str, Any]] = {}
-approvals: dict[str, dict[str, Any]] = {}
-_engine: Optional[tools.Engine] = None
-
-
-def get_engine() -> tools.Engine:
-    global _engine
-    if _engine is None:
-        _engine = tools.HttpEngine()
-    return _engine
-
-
-def set_engine(engine: tools.Engine) -> None:
-    """Tests inject a fake engine here."""
-    global _engine
-    _engine = engine
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 @app.get("/health")
-def health() -> dict:
-    return {"service": "agent", "ok": True, "llm": config.USE_LLM, "providers": config.LLM_PROVIDERS}
+def health():
+    return {"ok": True, "service": "agent", "stubs": config.USE_STUBS}
 
 
-# ---------------- agent runs ----------------
-async def _execute(run_id: str, ticket_id: str) -> None:
-    run = runs[run_id]
-
-    def on_event(ev: dict[str, Any]) -> None:
-        ev["ts"] = _now()
-        run["events"].append(ev)
-        audit.append({"kind": "trace", **ev})
-
+@app.post("/evidence/photo")
+def evidence_photo(req: PhotoRequest):
+    ticket = tools._get_ticket(req.ticket_id)
     try:
-        audit.append({"kind": "run_started", "run_id": run_id, "ticket_id": ticket_id})
-        result = await planner.run_agent(run_id, ticket_id, get_engine(), on_event)
-        run.update(result)
-        v = result["verdict"]
-        if v["recommended_action"] in ("reopen", "human_spot_check"):
-            approval_id = str(uuid.uuid4())
-            action = "reopen" if v["recommended_action"] == "reopen" else "escalate"
-            approvals[approval_id] = {"approval_id": approval_id, "ticket_id": ticket_id, "action": action,
-                                      "verdict_snapshot": v, "status": "pending", "note": None}
-            audit.append({"kind": "approval_proposed", "approval_id": approval_id, "action": action})
-            last = run["events"][-1]
-            on_event({"run_id": run_id, "step": last["step"] + 1, "type": "approval_needed", "tool": "propose_action",
-                      "summary": f"{action} proposed; waiting for human approval",
-                      "cost_spent": last["cost_spent"], "budget_left": last["budget_left"]})
-    except Exception as exc:  # surface failures in the trace instead of hanging the stream
-        run["error"] = str(exc)
-        audit.append({"kind": "run_failed", "run_id": run_id, "error": str(exc)})
-    finally:
-        run["done"] = True
+        return verify_photo(req.ticket_id, req.closure_photo_url, ticket, PhotoIndex())
+    except Exception as exc:
+        raise HTTPException(422, f"could not read photo: {exc}")
+
+
+class ContactRequest(BaseModel):
+    chat_id: str
+    lang: str = "en"
+    channel: str = "telegram"
+
+
+@app.post("/citizen/{ticket_id}/contact")
+def register_contact(ticket_id: str, req: ContactRequest):
+    """Demo only: link a ticket to one of our own registered Telegram chats."""
+    telegram.register_contact(ticket_id, req.chat_id, req.lang, req.channel)
+    return {"ticket_id": ticket_id, "chat_hash": telegram.chat_hash(req.chat_id)}
+
+
+class SendRequest(BaseModel):
+    ticket_id: str
+    category: str = "issue"
+    area: str = "your area"
+    date: str = "recently"
+
+
+@app.post("/citizen/send")
+def citizen_send(req: SendRequest):
+    """Contract endpoint: send the "Was it fixed?" message for a ticket (contact must be registered)."""
+    return ask_now(req.ticket_id, AskRequest(category=req.category, area=req.area, date=req.date))
+
+
+class AskRequest(BaseModel):
+    category: str = "pothole"
+    area: str = "your area"
+    date: str = "recently"
+
+
+@app.post("/citizen/{ticket_id}/ask")
+def ask_now(ticket_id: str, req: AskRequest):
+    """Demo trigger: send the "Was it fixed?" message to the registered contact."""
+    if not telegram.send_request(ticket_id, req.category, req.area, req.date):
+        raise HTTPException(409, "no usable contact for this ticket")
+    return {"sent": True}
+
+
+@app.post("/telegram/webhook")
+@app.post("/channels/telegram/webhook")
+def telegram_webhook(update: dict, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
+    if config.TELEGRAM_WEBHOOK_SECRET and x_telegram_bot_api_secret_token != config.TELEGRAM_WEBHOOK_SECRET:
+        raise HTTPException(403, "bad secret")
+    ev, run_id = process_telegram_update(update)
+    if ev is None:
+        return {"ok": True, "evidence": None}
+    return {"ok": True, "evidence_id": ev.evidence_id, "run_id": run_id}
+
+
+def process_telegram_update(update: dict):
+    fallback = llm_planner.classify_reply if llm.available_providers() else None
+    ev = telegram.handle_update(update, fallback)
+    if ev is None:
+        return None, None
+    run_id = agent.start_run(ev.ticket_id)   # re-run so the new evidence is fused into a fresh verdict
+    agent.run_in_background(run_id)
+    return ev, run_id
+
+
+def _poll_loop():
+    offset = None
+    while True:
+        try:
+            updates, offset = telegram.poll_once(offset)
+            for u in updates:
+                process_telegram_update(u)
+        except Exception:
+            time.sleep(3)
+
+
+@app.on_event("startup")
+def start_polling():
+    if config.TELEGRAM_POLLING and config.TELEGRAM_BOT_TOKEN:
+        threading.Thread(target=_poll_loop, daemon=True).start()
+
+
+@app.get("/whatsapp/webhook")
+@app.get("/channels/whatsapp/webhook")
+def whatsapp_verify(hub_mode: str | None = Query(default=None, alias="hub.mode"),
+                    hub_token: str | None = Query(default=None, alias="hub.verify_token"),
+                    hub_challenge: str | None = Query(default=None, alias="hub.challenge")):
+    if hub_mode == "subscribe" and config.WHATSAPP_VERIFY_TOKEN and hub_token == config.WHATSAPP_VERIFY_TOKEN:
+        return PlainTextResponse(hub_challenge or "")
+    raise HTTPException(403, "verification failed")
+
+
+@app.post("/whatsapp/webhook")
+@app.post("/channels/whatsapp/webhook")
+def whatsapp_webhook(payload: dict):
+    fallback = llm_planner.classify_reply if llm.available_providers() else None
+    run_ids = []
+    for m in whatsapp.parse_payload(payload):
+        ev = telegram.handle_reply("whatsapp", m["wa_id"], m["text"], m["has_photo"], fallback)
+        if ev is not None:
+            run_id = agent.start_run(ev.ticket_id)
+            agent.run_in_background(run_id)
+            run_ids.append(run_id)
+    return {"ok": True, "run_ids": run_ids}
 
 
 @app.post("/agent/run/{ticket_id}")
-async def start_run(ticket_id: str, background: BackgroundTasks) -> dict:
-    run_id = str(uuid.uuid4())
-    runs[run_id] = {"run_id": run_id, "ticket_id": ticket_id, "events": [], "verdict": None, "evidence": [], "done": False}
-    background.add_task(_execute, run_id, ticket_id)
+def run_ticket(ticket_id: str):
+    run_id = agent.start_run(ticket_id)
+    agent.run_in_background(run_id)
     return {"run_id": run_id}
 
 
-@app.get("/agent/runs/{run_id}")
-def get_run(run_id: str) -> dict:
-    if run_id not in runs:
-        raise HTTPException(404, "unknown run")
-    return runs[run_id]
-
-
 @app.get("/agent/stream/{run_id}")
-async def stream(run_id: str, request: Request) -> StreamingResponse:
-    if run_id not in runs:
+async def stream(run_id: str):
+    run = agent.RUNS.get(run_id)
+    if run is None:
         raise HTTPException(404, "unknown run")
 
     async def gen():
         sent = 0
         while True:
-            run = runs[run_id]
-            while sent < len(run["events"]):
-                yield f"data: {json.dumps(run['events'][sent])}\n\n"
+            while sent < len(run.events):
+                yield {"event": "trace", "data": run.events[sent].model_dump_json()}
                 sent += 1
-            if run["done"] and sent >= len(run["events"]):
-                yield "event: end\ndata: {}\n\n"
+            if run.status != "running" and sent >= len(run.events):
+                yield {"event": "end", "data": json.dumps({"status": run.status})}
                 return
-            if await request.is_disconnected():
-                return
-            yield ": ping\n\n"
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.1)
 
-    return StreamingResponse(gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return EventSourceResponse(gen())
 
 
-# ---------------- evidence / citizen (stubs) ----------------
-class PhotoRequest(BaseModel):
-    ticket_id: str
-    closure_photo_url: Optional[str] = None
-    citizen_photo_url: Optional[str] = None
-
-
-@app.post("/evidence/photo")
-async def evidence_photo(req: PhotoRequest) -> dict:
-    """STUB. AYUSH: imagehash + EXIF + CLIP."""
-    score = await get_engine().get_score(req.ticket_id)
-    return tools.stub_photo(req.ticket_id, score["p_false_closure"], score.get("model_version", ""))
-
-
-class CitizenSend(BaseModel):
-    ticket_id: str
-    channel: str = "telegram"
-
-
-@app.post("/citizen/send")
-def citizen_send(req: CitizenSend) -> dict:
-    """STUB. AYUSH: Telegram first, then WhatsApp Cloud."""
-    audit.append({"kind": "citizen_message_stub", "ticket_id": req.ticket_id, "channel": req.channel})
-    return {"sent": False, "mode": "stub"}
-
-
-@app.post("/telegram/webhook")
-async def telegram_webhook(request: Request) -> dict:
-    await request.body()
-    return {"ok": True, "mode": "stub"}
-
-
-@app.get("/whatsapp/webhook")
-def whatsapp_verify(request: Request) -> Any:
-    """Meta verification handshake. AYUSH: compare hub.verify_token with your env value."""
-    return int(request.query_params.get("hub.challenge", "0"))
-
-
-# ---------------- approvals ----------------
-class Decision(BaseModel):
-    decision: str  # approve | reject
-    note: Optional[str] = None
+@app.get("/agent/runs/{run_id}")
+def get_run(run_id: str):
+    run = agent.RUNS.get(run_id)
+    if run is not None:
+        return {"run_id": run_id, "ticket_id": run.ticket_id, "status": run.status,
+                "trace": [e.model_dump() for e in run.events], "verdict": run.verdict}
+    r = get_conn().execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
+    if r is None:
+        raise HTTPException(404, "unknown run")
+    return {"run_id": run_id, "ticket_id": r["ticket_id"], "status": r["status"],
+            "trace": json.loads(r["trace"]), "verdict": json.loads(r["verdict"]) if r["verdict"] else None}
 
 
 @app.get("/approvals")
-def list_approvals(status: Optional[str] = None) -> list[dict]:
-    return [a for a in approvals.values() if not status or a["status"] == status]
-
-
-async def _outcome_check(approval_id: str, ticket_id: str) -> None:
-    await asyncio.sleep(config.OUTCOME_DELAY_S)
-    try:
-        t = await get_engine().get_ticket(ticket_id)
-        audit.append({"kind": "outcome_check", "approval_id": approval_id, "ticket_status": t["status"]})
-    except Exception as exc:
-        audit.append({"kind": "outcome_check_failed", "approval_id": approval_id, "error": str(exc)})
+def list_approvals(status: str | None = "pending"):
+    return approvals.list_approvals(status)
 
 
 @app.post("/approvals/{approval_id}/decide")
-async def decide(approval_id: str, body: Decision, background: BackgroundTasks) -> dict:
-    a = approvals.get(approval_id)
-    if a is None:
+def decide(approval_id: str, req: DecideRequest):
+    try:
+        return approvals.decide(approval_id, req.decision, req.note)
+    except KeyError:
         raise HTTPException(404, "unknown approval")
-    if a["status"] != "pending":
-        raise HTTPException(409, f"already {a['status']}")
-    if body.decision not in ("approve", "reject"):
-        raise HTTPException(422, "decision must be approve or reject")
-    a["note"] = body.note
-    if body.decision == "reject":
-        a["status"] = "rejected"
-        audit.append({"kind": "approval_rejected", "approval_id": approval_id, "note": body.note})
-        return a
-    engine = get_engine()
-    result = await (engine.reopen(a["ticket_id"]) if a["action"] == "reopen" else engine.escalate(a["ticket_id"]))
-    a["status"] = "approved"
-    a["municipal_result"] = result
-    audit.append({"kind": "approval_approved", "approval_id": approval_id, "action": a["action"], "note": body.note})
-    background.add_task(_outcome_check, approval_id, a["ticket_id"])
-    return a
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
 
 
-# ---------------- audit ----------------
+@app.get("/outcomes")
+def outcomes():
+    return approvals.outcomes()
+
+
 @app.get("/audit")
-def get_audit() -> list[dict]:
-    return audit.rows
+def get_audit(limit: int = 500):
+    return audit.entries(limit)
 
 
 @app.get("/audit/verify")
-def verify_audit() -> dict:
+def verify_audit():
     return audit.verify()

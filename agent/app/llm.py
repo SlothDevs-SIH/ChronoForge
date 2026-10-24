@@ -1,48 +1,91 @@
-"""LLM tool-chooser. AYUSH: implement the provider calls. Everything here must be optional.
+"""Thin LLM interface: complete_json(prompt, schema) tries each configured provider in order.
 
-Contract with the planner:
-  choose_tool(state) -> a tool name string, or None.
-The planner validates the answer (eligibility, budget, not-already-used) and falls back to the
-deterministic planner on None, an invalid answer, or any exception. Never let this raise past the planner.
-
-Provider order comes from config.LLM_PROVIDERS (default gemini, openai). Keys live in .env only.
-Log which provider answered each step; the planner puts it in the trace summary.
-Strict JSON only: ask for {"tool": "<name>", "reason": "<short>"} and validate with Pydantic.
+Output is validated against a Pydantic model; invalid output gets one retry on the same provider,
+then the next provider. If every provider fails, LLMError is raised and the caller falls back to the
+deterministic planner. Keys come from the environment only. Prompts must carry hashes, never raw
+phone numbers or officer identifiers.
 """
-import os
-from typing import Any, Optional
+import json
+import logging
+from typing import Callable, TypeVar
+
+import httpx
+from pydantic import BaseModel, ValidationError
 
 from . import config
 
+log = logging.getLogger(__name__)
+T = TypeVar("T", bound=BaseModel)
 
-class ProviderNotConfigured(Exception):
+
+class LLMError(Exception):
     pass
 
 
-async def _call_gemini(prompt: str) -> dict[str, Any]:
-    if not os.environ.get("GEMINI_API_KEY"):
-        raise ProviderNotConfigured("GEMINI_API_KEY missing")
-    raise NotImplementedError("TODO: Google AI Studio call, JSON mode")
+def _gemini(prompt: str) -> str:
+    r = httpx.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent",
+        headers={"x-goog-api-key": config.GEMINI_API_KEY},
+        json={"contents": [{"parts": [{"text": prompt}]}],
+              "generationConfig": {"responseMimeType": "application/json", "temperature": 0}},
+        timeout=config.LLM_TIMEOUT)
+    r.raise_for_status()
+    return r.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
-async def _call_openai(prompt: str) -> dict[str, Any]:
-    if not os.environ.get("OPENAI_API_KEY"):
-        raise ProviderNotConfigured("OPENAI_API_KEY missing")
-    raise NotImplementedError("TODO: OpenAI call, JSON mode")
+def _openai(prompt: str) -> str:
+    r = httpx.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+        json={"model": config.OPENAI_MODEL, "temperature": 0,
+              "response_format": {"type": "json_object"},
+              "messages": [{"role": "user", "content": prompt}]},
+        timeout=config.LLM_TIMEOUT)
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
 
 
-_PROVIDERS = {"gemini": _call_gemini, "openai": _call_openai}
+PROVIDERS: dict[str, Callable[[str], str]] = {"gemini": _gemini, "openai": _openai}
+_KEY = {"gemini": lambda: config.GEMINI_API_KEY, "openai": lambda: config.OPENAI_API_KEY}
 
 
-async def choose_tool(state: dict[str, Any]) -> Optional[dict[str, str]]:
-    """Return {"tool": ..., "provider": ..., "reason": ...} or None to use the deterministic planner."""
-    if not config.USE_LLM:
-        return None
-    prompt = f"Pick the next verification tool for this closed complaint. State: {state}"
-    for name in config.LLM_PROVIDERS:
-        try:
-            out = await _PROVIDERS[name](prompt)
-            return {"tool": str(out["tool"]), "provider": name, "reason": str(out.get("reason", ""))}
-        except Exception:
-            continue
-    return None
+def available_providers() -> list[str]:
+    """Configured providers (in .env order) that have a key (or are injected, e.g. in tests)."""
+    return [p for p in config.LLM_PROVIDERS if p in PROVIDERS and (p not in _KEY or _KEY[p]())]
+
+
+def complete_json(prompt: str, schema: type[T]) -> tuple[T, str]:
+    """Return (validated object, provider name). Raises LLMError when nothing usable came back."""
+    full = (f"{prompt}\n\nRespond with a single JSON object matching this JSON schema, no prose:\n"
+            f"{json.dumps(schema.model_json_schema())}")
+    errors: list[str] = []
+    for name in available_providers():
+        for attempt in (1, 2):   # one retry on invalid output
+            try:
+                raw = PROVIDERS[name](full)
+                return schema.model_validate_json(raw), name
+            except (ValidationError, ValueError) as exc:
+                errors.append(f"{name}#{attempt}: invalid output ({type(exc).__name__})")
+            except Exception as exc:   # network, auth, rate limit: no point retrying this provider
+                errors.append(f"{name}: {type(exc).__name__}")
+                break
+    raise LLMError("; ".join(errors) or "no LLM provider configured")
+
+
+def transcribe(audio: bytes, mime: str = "audio/ogg") -> str:
+    """Voice-note transcription through Gemini audio input (hosted API, no GPU). Raises LLMError on failure."""
+    import base64
+    if not config.GEMINI_API_KEY:
+        raise LLMError("no Gemini key for transcription")
+    try:
+        r = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent",
+            headers={"x-goog-api-key": config.GEMINI_API_KEY},
+            json={"contents": [{"parts": [
+                {"text": "Transcribe this voice note exactly, in its original language. Output only the text."},
+                {"inline_data": {"mime_type": mime, "data": base64.b64encode(audio).decode()}}]}]},
+            timeout=max(config.LLM_TIMEOUT, 30))
+        r.raise_for_status()
+        return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as exc:
+        raise LLMError(f"transcription failed: {type(exc).__name__}")
