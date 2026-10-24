@@ -36,7 +36,7 @@ USE_LLM_PLANNER = os.getenv("AGENT_USE_LLM_PLANNER", "0") == "1"
 # LLM providers tried in order, then the deterministic planner. Keys live in .env only.
 LLM_PROVIDERS = [p.strip() for p in os.getenv("LLM_PROVIDERS", "gemini,openai").split(",") if p.strip()]
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "15"))

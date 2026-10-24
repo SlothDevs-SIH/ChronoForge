@@ -6,9 +6,9 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 ## Phase 0: Setup and contract
 - [x] Repo and service skeleton (`agent/`)
 - [x] Evidence, Verdict and trace-event fixtures in `contract/`
-- [ ] Telegram bot token created
+- [x] Telegram bot token created (@TruClosebot)
 - [ ] WhatsApp Cloud developer app started (approval runs in background)
-- [ ] LLM keys tested (Gemini AI Studio, OpenAI), stored in `.env` only
+- [ ] LLM keys tested: Gemini done and working live; OpenAI not added
 
 ## Phase 1: Core agent with stubs
 - [x] Fusion math (log-odds sum)
