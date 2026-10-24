@@ -4,7 +4,7 @@ import json
 import threading
 import time
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
@@ -12,9 +12,15 @@ from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 
 from . import agent, approvals, audit, config, llm, llm_planner, telegram, tools, whatsapp
-from .db import get_conn
+from .db import get_conn, lock
 from .models import DecideRequest, PhotoRequest
-from .photo import PhotoIndex, verify_photo
+from .photo import PhotoIndex, check_ref_allowed, verify_photo
+
+def require_admin(x_admin_token: str | None = Header(default=None)):
+    """Optional shared secret (AGENT_ADMIN_TOKEN). Unset = open, which is only acceptable on a laptop demo."""
+    if config.ADMIN_TOKEN and x_admin_token != config.ADMIN_TOKEN:
+        raise HTTPException(403, "admin token required")
+
 
 app = FastAPI(title="TrueClose Agent service")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -25,9 +31,13 @@ def health():
     return {"ok": True, "service": "agent", "stubs": config.USE_STUBS}
 
 
-@app.post("/evidence/photo")
+@app.post("/evidence/photo", dependencies=[Depends(require_admin)])
 def evidence_photo(req: PhotoRequest):
     ticket = tools._get_ticket(req.ticket_id)
+    try:
+        check_ref_allowed(req.closure_photo_url)
+    except ValueError as exc:
+        raise HTTPException(403, str(exc))
     try:
         return verify_photo(req.ticket_id, req.closure_photo_url, ticket, PhotoIndex())
     except Exception as exc:
@@ -40,7 +50,7 @@ class ContactRequest(BaseModel):
     channel: str = "telegram"
 
 
-@app.post("/citizen/{ticket_id}/contact")
+@app.post("/citizen/{ticket_id}/contact", dependencies=[Depends(require_admin)])
 def register_contact(ticket_id: str, req: ContactRequest):
     """Demo only: link a ticket to one of our own registered Telegram chats."""
     telegram.register_contact(ticket_id, req.chat_id, req.lang, req.channel)
@@ -54,7 +64,7 @@ class SendRequest(BaseModel):
     date: str = "recently"
 
 
-@app.post("/citizen/send")
+@app.post("/citizen/send", dependencies=[Depends(require_admin)])
 def citizen_send(req: SendRequest):
     """Contract endpoint: send the "Was it fixed?" message for a ticket (contact must be registered)."""
     return ask_now(req.ticket_id, AskRequest(category=req.category, area=req.area, date=req.date))
@@ -66,7 +76,7 @@ class AskRequest(BaseModel):
     date: str = "recently"
 
 
-@app.post("/citizen/{ticket_id}/ask")
+@app.post("/citizen/{ticket_id}/ask", dependencies=[Depends(require_admin)])
 def ask_now(ticket_id: str, req: AskRequest):
     """Demo trigger: send the "Was it fixed?" message to the registered contact."""
     if not telegram.send_request(ticket_id, req.category, req.area, req.date):
@@ -95,15 +105,40 @@ def process_telegram_update(update: dict):
     return ev, run_id
 
 
+def _load_offset() -> int | None:
+    row = get_conn().execute("SELECT v FROM kv WHERE k='telegram_offset'").fetchone()
+    return int(row["v"]) if row else None
+
+
+def _save_offset(offset: int) -> None:
+    with lock():
+        get_conn().execute("INSERT OR REPLACE INTO kv (k, v) VALUES ('telegram_offset', ?)", (str(offset),))
+        get_conn().commit()
+
+
 def _poll_loop():
-    offset = None
+    """Long-poll Telegram. The offset is saved BEFORE an update is processed, so a restart never replays an old
+    button tap or reply onto a newer question; updates run on a small pool so a slow one (an LLM call) cannot
+    delay the bot's reply to the next person."""
+    from concurrent.futures import ThreadPoolExecutor
+    pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="tg-update")
+    offset = _load_offset()
     while True:
         try:
             updates, offset = telegram.poll_once(offset)
+            if updates and offset:
+                _save_offset(offset)
             for u in updates:
-                process_telegram_update(u)
+                pool.submit(_safe_process, u)
         except Exception:
             time.sleep(3)
+
+
+def _safe_process(update: dict) -> None:
+    try:
+        process_telegram_update(update)
+    except Exception:
+        pass
 
 
 @app.on_event("startup")
@@ -147,7 +182,15 @@ def run_ticket(ticket_id: str):
 async def stream(run_id: str):
     run = agent.RUNS.get(run_id)
     if run is None:
-        raise HTTPException(404, "unknown run")
+        row = get_conn().execute("SELECT status, trace FROM runs WHERE run_id=?", (run_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "unknown run")
+
+        async def replay():
+            for ev in json.loads(row["trace"]):
+                yield {"event": "trace", "data": json.dumps(ev)}
+            yield {"event": "end", "data": json.dumps({"status": row["status"]})}
+        return EventSourceResponse(replay())
 
     async def gen():
         sent = 0
@@ -181,7 +224,7 @@ def list_approvals(status: str | None = "pending"):
     return approvals.list_approvals(status)
 
 
-@app.post("/approvals/{approval_id}/decide")
+@app.post("/approvals/{approval_id}/decide", dependencies=[Depends(require_admin)])
 def decide(approval_id: str, req: DecideRequest):
     try:
         return approvals.decide(approval_id, req.decision, req.note)

@@ -37,7 +37,7 @@ def test_typed_reply_gets_an_acknowledgement(sent):
     assert ev.verdict == "contradicts_fix"
     reply = messages(sent)[-1]["text"]
     assert "NOT fixed" in reply and "\n\n" in reply
-    assert any(m == "sendChatAction" for m, _ in sent)
+    assert not any(m == "sendChatAction" for m, _ in sent)   # no extra round trip before the answer
 
 
 def test_button_tap_is_recorded_and_the_buttons_are_removed(sent):

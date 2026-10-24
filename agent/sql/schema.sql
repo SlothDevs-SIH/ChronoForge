@@ -52,3 +52,7 @@ CREATE TABLE IF NOT EXISTS citizen_requests (
   asked_at TEXT,
   answered_at TEXT
 );
+CREATE TABLE IF NOT EXISTS kv (
+  k TEXT PRIMARY KEY,
+  v TEXT NOT NULL
+);

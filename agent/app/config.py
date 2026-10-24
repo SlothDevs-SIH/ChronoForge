@@ -47,8 +47,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "15"))
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "8"))   # a bot reply must not wait long on a slow LLM
 
+# When set, endpoints that message people, approve actions or read local files need header X-Admin-Token.
+ADMIN_TOKEN = os.getenv("AGENT_ADMIN_TOKEN", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_POLLING = os.getenv("TELEGRAM_POLLING", "0") == "1"   # long-poll instead of a webhook
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")

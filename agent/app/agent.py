@@ -34,9 +34,13 @@ class RunState:
 
 
 RUNS: dict[str, RunState] = {}
+MAX_RUNS_IN_MEMORY = 300
 
 
 def start_run(ticket_id: str) -> str:
+    if len(RUNS) >= MAX_RUNS_IN_MEMORY:   # finished runs stay readable from the database; drop the oldest in memory
+        for old in [k for k, r in RUNS.items() if r.status != "running"][: len(RUNS) - MAX_RUNS_IN_MEMORY + 1]:
+            RUNS.pop(old, None)
     run_id = str(uuid4())
     RUNS[run_id] = RunState(run_id, ticket_id)
     with lock():

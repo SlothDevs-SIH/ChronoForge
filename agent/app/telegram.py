@@ -8,6 +8,7 @@ evidence.
 """
 import hashlib
 import logging
+import threading
 from typing import Callable
 
 import httpx
@@ -18,6 +19,20 @@ from .models import Evidence, now_iso
 
 log = logging.getLogger(__name__)
 
+_client: httpx.Client | None = None
+_client_lock = threading.Lock()
+
+
+def _http() -> httpx.Client:
+    """One kept-alive HTTPS connection to Telegram. A fresh connection per call cost 1.4 to 2.5 s each (TLS handshake)
+    against 0.2 to 0.4 s on a reused one, which made every bot reply several seconds late."""
+    global _client
+    with _client_lock:
+        if _client is None:
+            _client = httpx.Client(timeout=httpx.Timeout(15.0, connect=8.0),
+                                   limits=httpx.Limits(max_keepalive_connections=4, keepalive_expiry=120))
+        return _client
+
 
 def chat_hash(chat_id: str | int) -> str:
     return hashlib.sha1(str(chat_id).encode()).hexdigest()[:16]
@@ -27,7 +42,7 @@ def chat_hash(chat_id: str | int) -> str:
 def _api(method: str, **payload) -> dict:
     if not config.TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
-    r = httpx.post(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/{method}", json=payload, timeout=10)
+    r = _http().post(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/{method}", json=payload)
     r.raise_for_status()
     return r.json()
 
@@ -54,10 +69,6 @@ def _notify(channel: str, chat_id: str | int, text: str, buttons=None) -> None:
             if config.WHATSAPP_TOKEN and config.WHATSAPP_PHONE_NUMBER_ID:
                 whatsapp.send_text(str(chat_id), text)
         elif config.TELEGRAM_BOT_TOKEN:
-            try:
-                _api("sendChatAction", chat_id=chat_id, action="typing")
-            except Exception:
-                pass
             send_message(chat_id, text, buttons)
     except Exception as exc:   # an undelivered acknowledgement must not break evidence handling
         log.warning("bot reply failed: %s", type(exc).__name__)
@@ -133,18 +144,25 @@ def _lang_for(chat_id: str | int, channel: str = "telegram") -> str:
 def _handle_button(cq: dict, fallback) -> Evidence | None:
     chat_id = ((cq.get("message") or {}).get("chat") or {}).get("id")
     data = cq.get("data") or ""
-    try:   # stop the button's loading spinner and remove the buttons so a tap cannot be repeated
-        if config.TELEGRAM_BOT_TOKEN:
+    if config.TELEGRAM_BOT_TOKEN:
+        try:   # stop the button's loading spinner immediately
             _api("answerCallbackQuery", callback_query_id=cq["id"])
-            if cq.get("message"):
-                _api("editMessageReplyMarkup", chat_id=chat_id, message_id=cq["message"]["message_id"],
-                     reply_markup={"inline_keyboard": []})
-    except Exception:
-        pass
+        except Exception:
+            pass
     if chat_id is None or not data.startswith("ans:"):
         return None
-    _, _, n = data.rpartition(":")
-    return handle_reply("telegram", chat_id, n if n in ("1", "2", "3") else "", False, fallback)
+    ticket_id, _, n = data[len("ans:"):].rpartition(":")      # "ans:<ticket id>:<1|2|3>"
+    ev = handle_reply("telegram", chat_id, n if n in ("1", "2", "3") else "", False, fallback, ticket_id=ticket_id)
+    if config.TELEGRAM_BOT_TOKEN and cq.get("message"):   # remove the buttons so they cannot be tapped twice
+        threading.Thread(target=_clear_buttons, args=(chat_id, cq["message"]["message_id"]), daemon=True).start()
+    return ev
+
+
+def _clear_buttons(chat_id, message_id) -> None:
+    try:
+        _api("editMessageReplyMarkup", chat_id=chat_id, message_id=message_id, reply_markup={"inline_keyboard": []})
+    except Exception:
+        pass
 
 
 def transcribe_voice(file_id: str, fetch=None, transcriber=None) -> str:
@@ -162,12 +180,19 @@ def transcribe_voice(file_id: str, fetch=None, transcriber=None) -> str:
 
 
 def handle_reply(channel: str, chat_id: str | int, text: str, has_photo: bool = False,
-                 fallback: Callable[[str], str | None] | None = None) -> Evidence | None:
+                 fallback: Callable[[str], str | None] | None = None, ticket_id: str | None = None) -> Evidence | None:
     """Channel-independent: match a reply to the open question for this contact, record Evidence, answer the
     citizen. Unclear replies and photos keep the question open so the citizen can still answer it."""
-    row = get_conn().execute(
-        "SELECT * FROM citizen_requests WHERE chat_id=? AND channel=? AND status='asked' "
-        "ORDER BY asked_at DESC LIMIT 1", (str(chat_id), channel)).fetchone()
+    if ticket_id is not None:   # a button tap names its ticket
+        row = get_conn().execute("SELECT * FROM citizen_requests WHERE ticket_id=? AND chat_id=? AND channel=? "
+                                 "AND status='asked'", (ticket_id, str(chat_id), channel)).fetchone()
+        if row is None:         # an old button on a question that is already answered or withdrawn
+            _notify(channel, chat_id, citizen.ack_text(_lang_for(chat_id, channel), "stale"))
+            return None
+    else:
+        row = get_conn().execute(
+            "SELECT * FROM citizen_requests WHERE chat_id=? AND channel=? AND status='asked' "
+            "ORDER BY asked_at DESC LIMIT 1", (str(chat_id), channel)).fetchone()
     if row is None:
         _notify(channel, chat_id, citizen.ack_text(_lang_for(chat_id, channel), "idle"))
         return None
@@ -199,8 +224,10 @@ def handle_reply(channel: str, chat_id: str | int, text: str, has_photo: bool = 
 
 def poll_once(offset: int | None = None, timeout: int = 20) -> tuple[list[dict], int | None]:
     """Long-poll getUpdates (no public URL needed). Returns (updates, next_offset)."""
-    r = httpx.get(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/getUpdates",
-                  params={"timeout": timeout, **({"offset": offset} if offset else {})}, timeout=timeout + 10)
+    payload = {"timeout": timeout, "allowed_updates": ["message", "callback_query"],
+               **({"offset": offset} if offset else {})}
+    r = _http().post(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/getUpdates", json=payload,
+                     timeout=timeout + 10)
     r.raise_for_status()
     updates = r.json()["result"]
     return updates, (updates[-1]["update_id"] + 1 if updates else offset)

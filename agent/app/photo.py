@@ -10,6 +10,8 @@ Checks and hand-set likelihood ratios (to be calibrated on the shared benchmark)
 import io
 import json
 import math
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,6 +22,7 @@ from PIL import Image
 from . import config
 from .models import Evidence
 
+_INDEX_LOCK = threading.Lock()
 DUP_HAMMING = 6            # pHash distance at or below this counts as near-duplicate
 GPS_FAR_METRES = 300.0
 STALE_DAYS = 30
@@ -28,6 +31,30 @@ LR_DUPLICATE, LR_GPS_FAR, LR_STALE, LR_CLEAN = 8.0, 4.0, 3.0, 0.5
 _GPS_IFD = 0x8825
 _EXIF_IFD = 0x8769
 _DATETIME_ORIGINAL = 0x9003
+
+
+def check_ref_allowed(ref: str) -> None:
+    """For references supplied by an API caller. Local files must live under the demo or data folders; remote URLs
+    must be public (no localhost, private or link-local addresses). Raises ValueError otherwise."""
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+    if ref.startswith(("http://", "https://")):
+        host = urlparse(ref).hostname or ""
+        try:
+            for info in socket.getaddrinfo(host, None):
+                ip = ipaddress.ip_address(info[4][0])
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                    raise ValueError("photo URL points at a private address")
+        except socket.gaierror:
+            raise ValueError("photo URL host does not resolve")
+        return
+    path = Path(ref.removeprefix("file://"))
+    path = path if path.is_absolute() else config.REPO_ROOT / path
+    allowed = [config.REPO_ROOT / "demo", config.REPO_ROOT / "data", Path(config.PHOTO_INDEX_PATH).resolve().parent]
+    resolved = path.resolve()
+    if not any(resolved.is_relative_to(a.resolve()) for a in allowed):
+        raise ValueError("photo path is outside the allowed folders")
 
 
 def load_image(ref: str) -> Image.Image:
@@ -82,8 +109,9 @@ class PhotoIndex:
     def __init__(self, path: str | None = None):
         self.path = Path(path or config.PHOTO_INDEX_PATH)
         self.data: dict[str, dict] = {}
-        if self.path.exists():
-            self.data = json.loads(self.path.read_text())
+        with _INDEX_LOCK:   # never read while another thread is swapping the file in
+            if self.path.exists():
+                self.data = json.loads(self.path.read_text())
 
     def nearest_other(self, ticket_id: str, phash_hex: str) -> tuple[str | None, int | None]:
         h = imagehash.hex_to_hash(phash_hex)
@@ -97,9 +125,26 @@ class PhotoIndex:
         return best, best_d
 
     def add(self, ticket_id: str, h: dict) -> None:
-        self.data[ticket_id] = h
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self.data))
+        """Merge with what is on disk first: two runs hold separate PhotoIndex objects, and a plain overwrite
+        would drop the other run's photo (a lost update that hides a later duplicate)."""
+        with _INDEX_LOCK:
+            if self.path.exists():
+                try:
+                    self.data = {**json.loads(self.path.read_text()), **self.data}
+                except ValueError:
+                    pass   # a half-written file from an older version: rebuild from memory
+            self.data[ticket_id] = h
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.data))
+            for attempt in range(8):   # Windows refuses a replace while a virus scanner or reader holds the file
+                try:
+                    tmp.replace(self.path)
+                    break
+                except PermissionError:
+                    if attempt == 7:
+                        raise
+                    time.sleep(0.02)
 
 
 def verify_photo(ticket_id: str, closure_photo: str, ticket: dict | None = None,

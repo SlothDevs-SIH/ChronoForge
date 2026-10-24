@@ -20,11 +20,16 @@ KEYWORDS = {
     "yes": {"1", "yes", "y", "yeah", "yep", "fixed", "done", "ok", "okay", "haan", "han", "ha", "ho", "hoy",
             "theek", "thik", "हाँ", "हां", "हो", "होय", "ठीक", "हुआ", "झाले", "झालं", "ಹೌದು", "ಆಗಿದೆ"},
     "no": {"2", "no", "n", "nope", "not", "nahi", "nahin", "nai", "nako", "naahi", "नहीं", "नही", "नाही",
-           "नको", "नहि", "ಇಲ್ಲ", "ಆಗಿಲ್ಲ", "ಬೇಡ"},
+           "नको", "नहि", "ಇಲ್ಲ", "ಆಗಿಲ್ಲ", "ಬೇಡ",
+           "still", "broken", "worse", "same", "pending", "nothing", "untouched", "unfixed", "unresolved",
+           "abhi", "waisa", "vaisa", "tasach", "तसाच", "अभी", "वैसा", "वैसे", "अजूनही", "ಇನ್ನೂ"},
     "partly": {"3", "partly", "partial", "partially", "half", "thoda", "thodasa", "kuch", "aanshik", "अंशतः",
                "थोड़ा", "थोडा", "काही", "ಸ್ವಲ್ಪ"},
     "stop": {"stop", "unsubscribe", "रुको", "बंद", "थांबा", "ನಿಲ್ಲಿಸಿ"},
 }
+# "no problem" / "no issues" are good news, not a "no"
+_GOOD_NEWS = re.compile(r"\b(no|zero)\s+(problems?|issues?|complaints?|worries)\b|\ball\s+(good|ok|okay|fine)\b")
+_PARTIAL = re.compile(r"\bnot\s+(fully|completely|entirely|totally|wholly)\b|\bhalf\b")
 NEGATORS = {"not", "never", "nahi", "nahin", "no", "नहीं", "नही", "नाही", "ಇಲ್ಲ"}
 
 INTENT_EVIDENCE = {
@@ -64,6 +69,7 @@ BUTTONS = {  # (yes, no, partly)
 }
 ACK = {
     "en": {
+        "stale": "ℹ️ That question was already answered or is no longer open.\n\nThank you!",
         "yes": "✅ Thank you!\n\nWe have recorded that the problem is fixed. Glad it was sorted out.",
         "no": "🙏 Thank you for telling us.\n\nWe have recorded that the problem is NOT fixed. "
               "The municipal team will review this closure.",
@@ -79,6 +85,7 @@ ACK = {
                 "Reply with a button or with 1, 2 or 3. Reply STOP to opt out.",
     },
     "hi": {
+        "stale": "ℹ️ इस प्रश्न का उत्तर पहले ही दिया जा चुका है या यह अब खुला नहीं है।\n\nधन्यवाद!",
         "yes": "✅ धन्यवाद!\n\nहमने दर्ज किया कि समस्या ठीक हो गई है।",
         "no": "🙏 बताने के लिए धन्यवाद।\n\nहमने दर्ज किया कि समस्या ठीक नहीं हुई है। नगर निगम की टीम इसकी समीक्षा करेगी।",
         "partly": "🙏 धन्यवाद।\n\nहमने दर्ज किया कि समस्या आंशिक रूप से ही ठीक हुई है। टीम इसकी समीक्षा करेगी।",
@@ -90,6 +97,7 @@ ACK = {
                 "बटन दबाएँ या 1, 2, 3 लिखें। बंद करने के लिए STOP लिखें।",
     },
     "mr": {
+        "stale": "ℹ️ या प्रश्नाचे उत्तर आधीच दिले आहे किंवा तो आता खुला नाही.\n\nधन्यवाद!",
         "yes": "✅ धन्यवाद!\n\nसमस्या सुटल्याची नोंद केली आहे.",
         "no": "🙏 कळवल्याबद्दल धन्यवाद.\n\nसमस्या सुटलेली नाही अशी नोंद केली आहे. महानगरपालिकेची टीम याचा आढावा घेईल.",
         "partly": "🙏 धन्यवाद.\n\nसमस्या अंशतःच सुटल्याची नोंद केली आहे. टीम आढावा घेईल.",
@@ -101,6 +109,7 @@ ACK = {
                 "बटण दाबा किंवा 1, 2, 3 लिहा. थांबण्यासाठी STOP लिहा.",
     },
     "kn": {
+        "stale": "ℹ️ ಈ ಪ್ರಶ್ನೆಗೆ ಈಗಾಗಲೇ ಉತ್ತರಿಸಲಾಗಿದೆ ಅಥವಾ ಅದು ಈಗ ತೆರೆದಿಲ್ಲ.\n\nಧನ್ಯವಾದಗಳು!",
         "yes": "✅ ಧನ್ಯವಾದಗಳು!\n\nಸಮಸ್ಯೆ ಪರಿಹಾರವಾಗಿದೆ ಎಂದು ದಾಖಲಿಸಲಾಗಿದೆ.",
         "no": "🙏 ತಿಳಿಸಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು.\n\nಸಮಸ್ಯೆ ಪರಿಹಾರವಾಗಿಲ್ಲ ಎಂದು ದಾಖಲಿಸಲಾಗಿದೆ. ಪಾಲಿಕೆ ತಂಡ ಇದನ್ನು ಪರಿಶೀಲಿಸುತ್ತದೆ.",
         "partly": "🙏 ಧನ್ಯವಾದಗಳು.\n\nಸಮಸ್ಯೆ ಭಾಗಶಃ ಮಾತ್ರ ಪರಿಹಾರವಾಗಿದೆ ಎಂದು ದಾಖಲಿಸಲಾಗಿದೆ.",
@@ -146,8 +155,11 @@ def parse_intent(text: str) -> str | None:
     hits = {intent: [t for t in toks if t in words] for intent, words in KEYWORDS.items()}
     if hits["stop"]:
         return "stop"
-    if hits["partly"]:
+    low = " ".join(toks)
+    if hits["partly"] or _PARTIAL.search(low):
         return "partly"
+    if _GOOD_NEWS.search(low):
+        return "yes"
     # "not fixed", "fixed nahi": a negator anywhere beats a positive word
     if any(t in NEGATORS for t in toks):
         return "no"
