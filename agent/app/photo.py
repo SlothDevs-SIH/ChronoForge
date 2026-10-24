@@ -23,10 +23,11 @@ from . import config
 from .models import Evidence
 
 _INDEX_LOCK = threading.Lock()
-DUP_HAMMING = 6            # pHash distance at or below this counts as near-duplicate
-GPS_FAR_METRES = 300.0
-STALE_DAYS = 30
-LR_DUPLICATE, LR_GPS_FAR, LR_STALE, LR_CLEAN = 8.0, 4.0, 3.0, 0.5
+_P = config.VC["photo"]
+DUP_HAMMING = _P["dup_hamming"]            # pHash distance at or below this counts as near-duplicate
+GPS_FAR_METRES = _P["gps_far_metres"]
+STALE_DAYS = _P["stale_days"]
+LR_DUPLICATE, LR_GPS_FAR, LR_STALE, LR_CLEAN = _P["lr_duplicate"], _P["lr_gps_far"], _P["lr_stale"], _P["lr_clean"]
 
 _GPS_IFD = 0x8825
 _EXIF_IFD = 0x8769
@@ -217,7 +218,7 @@ def verify_photo(ticket_id: str, closure_photo: str, ticket: dict | None = None,
             details["dino_error"] = type(exc).__name__
 
     lr_for = {"duplicate": LR_DUPLICATE, "location": LR_GPS_FAR, "timestamp": LR_STALE,
-              "scene": 5.0, "before_after": 3.0, "same_scene": 3.0}
+              "scene": _P["lr_scene"], "before_after": _P["lr_before_after"], "same_scene": _P["lr_same_scene"]}
     if flags:
         lr = math.prod(lr_for[f] for f in flags)
         verdict, conf = "contradicts_fix", 0.9 if "duplicate" in flags else 0.7

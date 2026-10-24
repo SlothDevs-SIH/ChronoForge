@@ -16,7 +16,7 @@ export default function ConnectionBadge() {
   const { engine, agent } = useConnection();
   return (
     <div className="conn-group" role="status" aria-label="Backend connection status">
-      <StatusDot state={engine.state} name="Engine" detail={engine.detail} />
+      <StatusDot state={engine.state} name="Data" detail={engine.detail} />
       <StatusDot state={agent.state} name="Agent" detail={agent.detail} />
     </div>
   );

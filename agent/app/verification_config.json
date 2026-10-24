@@ -1,0 +1,43 @@
+{
+  "version": "v1",
+  "calibrated": false,
+  "note": "Likelihood ratios are configured priors, not measured on real closures. Changing any value needs an explicit decision and a new version.",
+  "thresholds": { "not_fixed": 0.75, "fixed": 0.25 },
+  "budget": 10,
+  "max_steps": 8,
+  "tool_costs": {
+    "get_score": 0,
+    "check_photo": 1,
+    "check_satellite": 3,
+    "ask_citizen": 2,
+    "request_human_spot_check": 10,
+    "propose_action": 0
+  },
+  "correlation": { "pairs": [["photo", "citizen"]], "weight": 0.7 },
+  "photo": {
+    "lr_duplicate": 8.0,
+    "lr_gps_far": 4.0,
+    "lr_stale": 3.0,
+    "lr_clean": 0.5,
+    "dup_hamming": 6,
+    "gps_far_metres": 300.0,
+    "stale_days": 30,
+    "lr_scene": 5.0,
+    "lr_before_after": 3.0,
+    "lr_same_scene": 3.0
+  },
+  "citizen": { "lr_no": 6.0, "lr_partly": 2.0, "lr_yes": 0.3, "lr_silence": 1.2 },
+  "clip": { "scene_still_broken": 0.65, "different_place": 0.55, "lr_scene_broken": 5.0, "lr_different_place": 3.0 },
+  "dino": { "different_scene": 0.35 },
+  "stub_lr": {
+    "photo": { "bad": 5.0, "good": 0.4 },
+    "satellite": { "bad": 4.0, "good": 0.35 },
+    "citizen": { "bad": 6.0, "good": 0.3 },
+    "human": { "bad": 20.0, "good": 0.05 }
+  },
+  "satellite_reference": {
+    "note": "Satellite likelihood ratios come from the Engine (0.45 when change is seen, 1.25 when it is not). They are listed here for the record only; the Agent does not read this block.",
+    "change_seen": 0.45,
+    "no_change_seen": 1.25
+  }
+}

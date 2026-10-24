@@ -44,10 +44,9 @@ On ordinary real tickets the agent has almost no evidence (see `INTEGRATION.md`)
 
 ## Deploying
 
-1. **Engine + Agent** (any host that runs Docker): `docker compose up --build`. Copy `agent/.env.example` to `.env` at the repo root and set the REQUIRED lines (auth secret, first admin, Telegram token). Keep the `agent-data` volume (accounts, cases, photos) and mount `./data` for the ticket warehouse. Run **one** agent per Telegram bot token.
-2. **Checks:** `GET :8002/ready` is 200 when the database and the Engine answer; `GET :8001/health` for the Engine.
-3. **Website** (`web/`): `npm run build`, host `dist/` on Vercel or any static host. Route `/api/agent/*` and `/api/engine/*` to the two services BEFORE the single-page catch-all in `web/vercel.json`, and set `AGENT_CORS_ORIGINS` to the site address.
-4. Server events (the live agent trace) use server-sent events: the proxy in front of the Agent must not buffer them.
+Full steps (Supabase sign-in, Render, Vercel) are in [DEPLOY_STEPS.md](DEPLOY_STEPS.md), and the environment variables in [contract/AUTH_AND_DEPLOY.md](contract/AUTH_AND_DEPLOY.md). Locally, `npm run dev` in `web/` skips sign-in (the backends run with `AUTH_REQUIRED=0`), so the whole app is open as a local admin.
+
+Website requests, the Telegram link, case tracking and citizen photos add a few settings, all optional (see `agent/.env.example`). Run **one** Agent per Telegram bot token, and keep `AGENT_PHOTO_DIR` and the database on a persistent disk.
 
 ## Prior work
 GEOAI-04 (satellite change engine) and the Catalyst AI engines are our earlier projects and are reused here as acknowledged prior components. The closure-integrity logic, agent, connectors and verification loop are new this weekend.

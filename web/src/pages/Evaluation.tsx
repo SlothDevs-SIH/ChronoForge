@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
-import PublicNav from "../components/PublicNav";
+import { ErrorState, Skeleton } from "../components/States";
+import PublicNav, { PublicFooter } from "../components/PublicNav";
 
 /* The Engine's results file is a large nested document; it is read loosely and every figure shown comes from it. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -12,7 +13,7 @@ function Synthetic() {
 }
 
 export default function Evaluation() {
-  const { data, isPending, error } = useQuery({ queryKey: ["eval"], queryFn: api.evalResults, retry: false });
+  const { data, isPending, error, refetch } = useQuery({ queryKey: ["eval"], queryFn: api.evalResults, retry: false });
   const e: any = data;
   const bl = e?.scorers?.["blr-reopen-v1"], mu = e?.scorers?.["mum-flags-v1"], sy = e?.scorers?.["syn-truth-v1"];
   const bench = e?.verifiers?.benchmark_v1, sat = e?.verifiers?.satellite;
@@ -29,8 +30,8 @@ export default function Evaluation() {
           <h1>Evaluation</h1>
           <p>What we measured, on which data, and what it does not show. We claim no real-world false-closure rate. Every figure below is read from the Engine's stored results.</p>
         </header>
-        {isPending && <p className="muted">Loading results…</p>}
-        {error && <div className="offline" role="alert"><div><strong>The Engine is not responding.</strong><p>Results are served by the Engine on port 8001. Start it and this page recovers by itself.</p></div></div>}
+        {isPending && <Skeleton rows={6} label="Loading results" />}
+        {error && <ErrorState error={error} onRetry={() => void refetch()} title="We couldn't load the results" />}
         {e && !ready && <p className="muted">The Engine returned results in an unexpected shape, so nothing is shown rather than guessing.</p>}
         {ready && <>
           <section className="panel" aria-labelledby="sc">
@@ -86,6 +87,7 @@ export default function Evaluation() {
           </section>
         </>}
       </main>
+      <PublicFooter current="/evaluation" />
     </div>
   );
 }

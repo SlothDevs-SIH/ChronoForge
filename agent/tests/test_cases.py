@@ -1,5 +1,5 @@
 """Website request -> Telegram link -> city closes -> watcher runs once -> admin reopens -> citizen told."""
-from app import agent, approvals, auth, cases, config, telegram
+from app import agent, approvals, cases, config, telegram
 from app.db import get_conn
 from app.models import Verdict
 
@@ -12,10 +12,6 @@ def _capture(monkeypatch):
         SENT.append((str(chat_id), text))
         return True
     monkeypatch.setattr(telegram, "deliver", fake)
-
-
-def _user():
-    return auth.register("c@x.in", "C", "longenough1", "citizen")["user_id"]
 
 
 def test_link_token_is_single_use_and_confirms_the_submission(monkeypatch):
@@ -43,8 +39,7 @@ def test_watcher_handles_each_closure_once_and_skips_open_approvals(monkeypatch)
     started = []
     monkeypatch.setattr(agent, "start_run", lambda tid: started.append(tid) or "run")
     monkeypatch.setattr(agent, "run_in_background", lambda run_id: None)
-    uid = _user()
-    auth.add_ticket(uid, "web-00001")
+    cases.link_ticket("u1", "web-00001")
     telegram.register_contact("web-00001", 555)
     open_ = {"status": "open", "closed_at": None}
     from datetime import datetime, timedelta, timezone

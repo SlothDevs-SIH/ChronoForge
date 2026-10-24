@@ -16,12 +16,13 @@ import secrets
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
 
-from . import agent, approvals, auth, citizen, config, events, outbox, ratelimit, telegram
+from . import agent, approvals, citizen, config, events, outbox, ratelimit, telegram
 from .db import get_conn, lock
 from .models import now_iso
 
@@ -50,8 +51,9 @@ _bot_username: str | None = None
 DUP_HAMMING = 6   # same near-duplicate rule the closure-photo check uses
 
 
-def _engine_headers() -> dict:
-    return {"X-Admin-Token": config.ENGINE_ADMIN_TOKEN} if config.ENGINE_ADMIN_TOKEN else {}
+def engine_headers() -> dict:
+    """How the Agent identifies itself to the Engine (shared service secret, when one is configured)."""
+    return {"X-Service-Token": config.ENGINE_SERVICE_TOKEN} if config.ENGINE_SERVICE_TOKEN else {}
 
 
 def bot_username() -> str | None:
@@ -59,7 +61,8 @@ def bot_username() -> str | None:
     if _bot_username is None and config.TELEGRAM_BOT_TOKEN:
         try:
             _bot_username = telegram._api("getMe")["result"]["username"]
-        except Exception:
+        except Exception as exc:
+            log.warning("could not read the bot name from Telegram: %s", type(exc).__name__)
             return None
     return _bot_username
 
@@ -73,7 +76,7 @@ def submit(user_id: str, category: str, text: str, ward: str, lat: float | None,
                           (user_id, f"Request filed: {text[:200]}", _ago(60))).fetchone():
         raise ValueError("you just sent this exact request, wait a minute before sending it again")
     try:
-        r = httpx.post(f"{config.ENGINE_URL}/requests", headers=_engine_headers(), timeout=10,
+        r = httpx.post(f"{config.ENGINE_URL}/requests", headers=engine_headers(), timeout=10,
                        json={"category": category, "text": text, "ward": ward, "lat": lat, "lng": lng})
     except httpx.HTTPError:
         raise ConnectionError("the request service is not reachable right now, try again in a moment")
@@ -81,9 +84,18 @@ def submit(user_id: str, category: str, text: str, ward: str, lat: float | None,
         raise ValueError("describe the problem in a few words and pick a category")
     r.raise_for_status()
     ticket = r.json()
-    auth.add_ticket(user_id, ticket["ticket_id"])
+    link_ticket(user_id, ticket["ticket_id"])
     events.record(ticket["ticket_id"], "submitted", f"Request filed: {text[:200]}")
     return {"ticket": ticket, **new_link(ticket["ticket_id"])}
+
+
+def link_ticket(user_id: str, ticket_id: str) -> None:
+    """Make a request visible to the citizen who filed it (the same link an admin would make)."""
+    with lock():
+        get_conn().execute("DELETE FROM user_tickets WHERE user_id=? AND ticket_id=?", (user_id, ticket_id))
+        get_conn().execute("INSERT INTO user_tickets (user_id, ticket_id, linked_by, created_at) VALUES (?,?,?,?)",
+                           (user_id, ticket_id, user_id, now_iso()))
+        get_conn().commit()
 
 
 def _ago(seconds: float) -> str:
@@ -150,7 +162,7 @@ def receive_photo(chat_id, image: dict, fetch=None) -> dict | None:
         telegram._notify("telegram", chat_id, NO_REQUEST_FOR_PHOTO)
         return None
     ticket_id = row["ticket_id"]
-    if config.RATE_LIMIT and not ratelimit.allow(f"photo:{chat_id}", 10, 3600):
+    if config.RATE_LIMITS_ENABLED and not ratelimit.allow(f"photo:{chat_id}", 10, 3600):
         telegram._notify("telegram", chat_id, "You have sent many photos in the last hour. Please wait a little before sending more.")
         return None
     try:
@@ -258,7 +270,7 @@ def tracked_tickets() -> dict[str, str]:
     """ticket id -> when tracking began. Only a closure that happens AFTER this starts a verification on its own."""
     conn = get_conn()
     since: dict[str, str] = {}
-    for r in conn.execute("SELECT ticket_id, added_at AS ts FROM user_tickets UNION ALL "
+    for r in conn.execute("SELECT ticket_id, created_at AS ts FROM user_tickets UNION ALL "
                           "SELECT ticket_id, created_at FROM citizen_requests WHERE status!='opted_out'"):
         if r["ticket_id"] not in since or _parse(r["ts"]) < _parse(since[r["ticket_id"]]):
             since[r["ticket_id"]] = r["ts"]
@@ -283,8 +295,17 @@ def tick(fetch_ticket=None) -> list[str]:
     from . import tools
     fetch = fetch_ticket or tools._get_ticket
     started = []
-    for tid, since in tracked_tickets().items():
-        t = fetch(tid)
+    tracked = tracked_tickets()
+
+    def safe(tid):
+        try:
+            return fetch(tid)
+        except Exception:
+            return None
+    with ThreadPoolExecutor(max_workers=8) as pool:   # one slow ticket must not hold up the rest
+        fetched = dict(zip(tracked, pool.map(safe, tracked)))
+    for tid, since in tracked.items():
+        t = fetched[tid]
         if not t or t.get("status") != "closed" or not t.get("closed_at"):
             continue
         if _seen(tid) == t["closed_at"] or _parse(t["closed_at"]) < _parse(since):
@@ -346,10 +367,13 @@ def watch_loop() -> None:
     while True:
         time.sleep(config.WATCH_INTERVAL)
         for step in (tick, tick_silence, outbox.process_due):
+            began = time.monotonic()
             try:
                 step()
             except Exception as exc:   # one failing step must not stop the others, or the watcher
                 log.warning("watcher step %s failed: %s", step.__name__, type(exc).__name__)
+            if time.monotonic() - began > 5:
+                log.warning("watcher step %s was slow: %.1f s", step.__name__, time.monotonic() - began)
 
 
 def start_watcher() -> None:
@@ -359,7 +383,7 @@ def start_watcher() -> None:
 
 def close_for_demo(ticket_id: str) -> dict:
     """Admin button: stand in for the city closing a website request."""
-    r = httpx.post(f"{config.ENGINE_URL}/muni/tickets/{ticket_id}/close", headers=_engine_headers(), timeout=10)
+    r = httpx.post(f"{config.ENGINE_URL}/muni/tickets/{ticket_id}/close", headers=engine_headers(), timeout=10)
     if r.status_code == 409:
         raise ValueError("this request is not open")
     r.raise_for_status()

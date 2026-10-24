@@ -13,7 +13,8 @@ from typing import Callable
 from . import config
 from .models import Evidence
 
-LR_NO, LR_PARTLY, LR_YES, LR_SILENCE = 6.0, 2.0, 0.3, 1.2
+_C = config.VC["citizen"]
+LR_NO, LR_PARTLY, LR_YES, LR_SILENCE = _C["lr_no"], _C["lr_partly"], _C["lr_yes"], _C["lr_silence"]
 
 # Intent -> keywords (lowercased; Devanagari and Kannada kept as-is). Whole-word match after normalisation.
 KEYWORDS = {

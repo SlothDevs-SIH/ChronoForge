@@ -11,26 +11,22 @@ import threading
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
+from . import auth, errors, insights
 from .models import CloseRequest, Evidence, MuniActionResult, NewRequest, SatelliteCheckRequest, Score, Ticket, TicketWithScore
-from . import insights
 from .store import store
 
 _sync_lock = threading.Lock()
 
 
-def require_admin(x_admin_token: Optional[str] = Header(default=None)) -> None:
-    """Optional shared secret (ENGINE_ADMIN_TOKEN) for the heavy admin endpoints. Unset = open (laptop demo only)."""
-    token = os.environ.get("ENGINE_ADMIN_TOKEN", "")
-    if token and x_admin_token != token:
-        raise HTTPException(403, "admin token required")
-
-
 app = FastAPI(title="TrueClose Engine", version="0.2.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# CORS allowlist from CORS_ORIGINS (comma separated). Unset means "*", acceptable only for a local demo.
+_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()] or ["*"]
+app.add_middleware(CORSMiddleware, allow_origins=_origins, allow_methods=["*"], allow_headers=["*"], expose_headers=["X-Request-ID"])
+errors.install(app)
 
 
 def _ticket(ticket_id: str) -> Ticket:
@@ -45,13 +41,25 @@ def health() -> dict:
     return {"service": "engine", "ok": True, "mode": store.mode}
 
 
+@app.get("/ready")
+def ready():
+    """Readiness: the store is loaded and, unless fixtures were asked for, the real warehouse is present."""
+    from .store import WAREHOUSE_DIR
+    files = sorted(f.name for f in WAREHOUSE_DIR.glob("tickets_*.parquet")) if WAREHOUSE_DIR.exists() else []
+    fixtures_ok = os.environ.get("ENGINE_DATA_MODE") == "fixtures"
+    ok = store.mode == "warehouse" or fixtures_ok
+    body = {"service": "engine", "ready": ok, "store_loaded": True, "mode": store.mode, "warehouse_files": len(files),
+            "reason": None if ok else "no warehouse loaded: set WAREHOUSE_URL or run the ingest"}
+    return JSONResponse(body, status_code=200 if ok else 503)
+
+
 @app.get("/cities")
 def cities() -> list[dict]:
     """Per-city counts and data-quality badge inputs for the UI's city switcher."""
     return store.cities()
 
 
-@app.get("/tickets", response_model=list[TicketWithScore])
+@app.get("/tickets", response_model=list[TicketWithScore], dependencies=[Depends(auth.staff)])
 def list_tickets(
     city: Optional[str] = None,
     ward: Optional[str] = None,
@@ -68,18 +76,18 @@ def list_tickets(
                               limit=limit, offset=offset, sort=sort)
 
 
-@app.get("/tickets/{ticket_id}", response_model=Ticket)
+@app.get("/tickets/{ticket_id}", response_model=Ticket, dependencies=[Depends(auth.ticket_reader)])
 def get_ticket(ticket_id: str) -> Ticket:
     return _ticket(ticket_id)
 
 
-@app.get("/tickets/{ticket_id}/score", response_model=Score)
+@app.get("/tickets/{ticket_id}/score", response_model=Score, dependencies=[Depends(auth.ticket_reader)])
 def get_score(ticket_id: str) -> Score:
     _ticket(ticket_id)
     return store.get_score(ticket_id)
 
 
-@app.post("/satellite/check", response_model=Evidence)
+@app.post("/satellite/check", response_model=Evidence, dependencies=[Depends(auth.staff)])
 def satellite_check(req: SatelliteCheckRequest) -> Evidence:
     """Real Sentinel-2 check. Ineligible tickets (wrong category, no exact point, no closing date) return inconclusive at
     cost 0. Eligible ones read imagery live (10 to 60 s) or from the cache; cached_only=true never reads live and answers
@@ -88,7 +96,7 @@ def satellite_check(req: SatelliteCheckRequest) -> Evidence:
     return store.satellite_evidence(req.ticket_id, cached_only=req.cached_only, refresh=req.refresh)
 
 
-@app.get("/satellite/chip/{ticket_id}/{which}.png")
+@app.get("/satellite/chip/{ticket_id}/{which}.png", dependencies=[Depends(auth.ticket_reader)])
 def satellite_chip(ticket_id: str, which: Literal["before", "after"]):
     """Before/after image chip (about 400 m across, site window outlined) written by a live or cached check."""
     from .satellite import verifier
@@ -117,14 +125,14 @@ def demo_photo(ticket_id: str, which: Literal["before", "after"]):
     return FileResponse(path, media_type="image/jpeg")
 
 
-@app.get("/wards/stats")
+@app.get("/wards/stats", dependencies=[Depends(auth.staff)])
 def ward_stats(city: Optional[str] = None, category: Optional[str] = None,
                limit: int = Query(500, ge=1, le=5000)) -> list[dict]:
     """official_rate = share of tickets no longer open. honest_rate is null until the scorer exists."""
     return store.ward_stats(city, category)[:limit]
 
 
-@app.get("/wards/map")
+@app.get("/wards/map", dependencies=[Depends(auth.staff)])
 def ward_map(city: str) -> list[dict]:
     """Ward dots for the overview map: position, official rate and reopen rate (null where the city has no reopen status)."""
     return store.ward_map(city)
@@ -135,7 +143,7 @@ def eval_results() -> dict:
     return store.eval_results
 
 
-@app.post("/connectors/{name}/sync", dependencies=[Depends(require_admin)])
+@app.post("/connectors/{name}/sync", dependencies=[Depends(auth.admin_or_token)])
 def connector_sync(name: str) -> dict:
     """Re-run a connector (mumbai | bengaluru | pune | synthetic) and reload the store. Takes 10 to 30 seconds."""
     from .ingest import SOURCES, ingest  # imported lazily: pulls in pandas
@@ -155,12 +163,12 @@ def connector_sync(name: str) -> dict:
 
 
 # ---- Simulated municipal system (clearly labelled simulated in the UI) ----
-@app.get("/muni/tickets", response_model=list[Ticket])
+@app.get("/muni/tickets", response_model=list[Ticket], dependencies=[Depends(auth.service_caller)])
 def muni_tickets(limit: int = Query(100, ge=1, le=1000)) -> list[Ticket]:
     return store.muni_tickets(limit)
 
 
-@app.post("/muni/tickets/{ticket_id}/reopen", response_model=MuniActionResult)
+@app.post("/muni/tickets/{ticket_id}/reopen", response_model=MuniActionResult, dependencies=[Depends(auth.service_caller)])
 def muni_reopen(ticket_id: str) -> MuniActionResult:
     t = _ticket(ticket_id)
     if t.status != "closed":   # only a closed ticket can be reopened; an open or already reopened one cannot
@@ -169,7 +177,7 @@ def muni_reopen(ticket_id: str) -> MuniActionResult:
     return MuniActionResult(ticket_id=ticket_id, status="reopened", note="simulated municipal system")
 
 
-@app.post("/requests", response_model=Ticket, dependencies=[Depends(require_admin)])
+@app.post("/requests", response_model=Ticket, dependencies=[Depends(auth.service_caller)])
 def create_request(req: NewRequest) -> Ticket:
     """A citizen files a complaint on the TrueClose website. Called by the Agent service on their behalf."""
     if len(req.text.strip()) < 5:
@@ -181,13 +189,13 @@ def create_request(req: NewRequest) -> Ticket:
         raise HTTPException(501, str(exc))
 
 
-@app.get("/requests/similar")
+@app.get("/requests/similar", dependencies=[Depends(auth.staff)])
 def similar_requests(category: str, text: str, ward: str = "", limit: int = Query(3, ge=1, le=10)) -> list[dict]:
     """Open website requests that look like the same problem, so a citizen can follow one instead of filing another."""
     return insights.similar(store.open_web_requests(), category=category, ward=ward, text=text, limit=limit)
 
 
-@app.get("/insights/hotspots")
+@app.get("/insights/hotspots", dependencies=[Depends(auth.staff)])
 def hotspots(min_closed: int = Query(insights.MIN_CLOSED, ge=10, le=1000)) -> dict:
     """Wards and closing officers (by hash) whose closures are reopened far more often than their city average."""
     return {"min_closed": min_closed, "rule": "one-sided binomial test, Bonferroni-corrected, and at least 1.5 times the city rate",
@@ -195,7 +203,7 @@ def hotspots(min_closed: int = Query(insights.MIN_CLOSED, ge=10, le=1000)) -> di
             "hotspots": insights.hotspots(store.reopen_groups(), min_closed)}
 
 
-@app.post("/muni/tickets/{ticket_id}/close", response_model=MuniActionResult, dependencies=[Depends(require_admin)])
+@app.post("/muni/tickets/{ticket_id}/close", response_model=MuniActionResult, dependencies=[Depends(auth.service_caller)])
 def muni_close(ticket_id: str, req: CloseRequest = CloseRequest()) -> MuniActionResult:
     """Simulated municipal system closing a website request (a real city does this in its own system)."""
     try:
@@ -207,7 +215,7 @@ def muni_close(ticket_id: str, req: CloseRequest = CloseRequest()) -> MuniAction
     return MuniActionResult(ticket_id=ticket_id, status="closed", note="simulated municipal system")
 
 
-@app.post("/muni/tickets/{ticket_id}/escalate", response_model=MuniActionResult)
+@app.post("/muni/tickets/{ticket_id}/escalate", response_model=MuniActionResult, dependencies=[Depends(auth.service_caller)])
 def muni_escalate(ticket_id: str) -> MuniActionResult:
     t = _ticket(ticket_id)
     return MuniActionResult(ticket_id=ticket_id, status=t.status, note="escalated (simulated municipal system)")

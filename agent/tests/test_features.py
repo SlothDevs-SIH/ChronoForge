@@ -8,10 +8,11 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app import approvals, auth, cases, config, events, explain, lang, outbox, ratelimit, summary, telegram
+from app import approvals, cases, config, events, explain, lang, outbox, ratelimit, summary, telegram
 from app.db import get_conn
 from app.main import app
 from app.models import Evidence, Verdict
+from tests.authkit import bearer, link, seed_user
 
 client = TestClient(app)
 SENT: list = []
@@ -244,30 +245,17 @@ def test_failed_reopen_can_be_retried_and_the_citizen_is_told_only_on_success(mo
 
 
 # ---- 8. limits ----------------------------------------------------------------------------------------------------
-def test_login_is_rate_limited_per_client(monkeypatch):
-    monkeypatch.setattr(config, "RATE_LIMIT", True)
-    ratelimit.reset()
-    codes = [client.post("/auth/login", json={"email": "a@b.in", "password": "x" * 9}).status_code for _ in range(12)]
-    assert codes[:10] == [401] * 10 and codes[10:] == [429, 429]
-    ratelimit.reset()
+def test_filing_requests_is_rate_limited_per_citizen(auth_on):
+    seed_user("flood")
+    codes = [client.post("/me/requests", json={"category": "pothole", "text": f"pothole number {i} outside the gate", "ward": "Kothrud"},
+                         headers=bearer("flood")).status_code for i in range(config.REQUESTS_PER_HOUR + 2)]
+    assert 429 not in codes[:config.REQUESTS_PER_HOUR] and codes[-2:] == [429, 429]   # the first ones reach the (down) Engine: 503
 
 
 def test_sliding_window_forgets_old_hits():
     ratelimit.reset()
     assert [ratelimit.allow("k", 2, 10, now=t) for t in (0, 1, 2)] == [True, True, False]
     assert ratelimit.allow("k", 2, 10, now=11.5) is True
-
-
-def test_a_user_cannot_flood_requests(monkeypatch):
-    monkeypatch.setattr(config, "RATE_LIMIT", True)
-    ratelimit.reset()
-    from fastapi import HTTPException
-    for _ in range(config.REQUESTS_PER_HOUR):
-        ratelimit.check_user("request", "u1", config.REQUESTS_PER_HOUR, 3600)
-    with pytest.raises(HTTPException) as e:
-        ratelimit.check_user("request", "u1", config.REQUESTS_PER_HOUR, 3600)
-    assert e.value.status_code == 429
-    ratelimit.reset()
 
 
 # ---- 9. summary ---------------------------------------------------------------------------------------------------
@@ -284,44 +272,56 @@ def test_summary_with_nothing_has_no_rate():
 
 
 # ---- 10. timelines and who can see what -------------------------------------------------------------------------
-def _login(email, role="citizen"):
-    config.AUTH_ENFORCE = True
-    client.post("/auth/register", json={"email": email, "name": "T", "password": "longenough1", "role": role})
-    return {"Authorization": "Bearer " + client.post("/auth/login", json={"email": email, "password": "longenough1"}).json()["token"]}
-
-
-def test_citizen_sees_only_their_own_citizen_visible_events():
-    me, other = _login("me@x.in"), _login("other@x.in")
-    uid = client.get("/auth/me", headers=me).json()["user_id"]
-    auth.add_ticket(uid, "web-00001")
+def test_citizen_sees_only_citizen_visible_events_of_their_own_request(auth_on):
+    seed_user("me"); seed_user("other"); link("me", "web-00001")
     events.record("web-00001", "closed", "The city marked it closed.")
     events.record("web-00001", "reopen_proposed", "internal", "staff")
-    got = client.get("/me/requests/web-00001/timeline", headers=me).json()
+    got = client.get("/cases/web-00001/timeline", headers=bearer("me")).json()
     assert [e["kind"] for e in got] == ["closed"]
-    assert client.get("/me/requests/web-00001/timeline", headers=other).status_code == 404
-    assert client.get("/cases/web-00001/timeline", headers=me).status_code == 403
-    assert client.get("/cases/web-00001/photos", headers=me).status_code == 403
-    assert client.get("/admin/summary", headers=me).status_code == 403
-    assert client.post("/approvals/x/retry", headers=me).status_code == 403
+    assert client.get("/cases/web-00001/timeline", headers=bearer("other")).status_code == 403   # not theirs
+    assert client.get("/cases/web-00001/timeline").status_code == 401
+    for path in ("/cases/web-00001/photos", "/admin/summary"):
+        assert client.get(path, headers=bearer("me")).status_code == 403
+    assert client.post("/approvals/x/retry", headers=bearer("me")).status_code == 403
 
 
-def test_staff_see_internal_events_too():
-    config.AUTH_ENFORCE = True
-    config.FIRST_ADMIN_EMAIL, config.FIRST_ADMIN_PASSWORD = "a@x.in", "adminpass123"
-    auth.seed_admin()
-    admin = {"Authorization": "Bearer " + client.post("/auth/login", json={"email": "a@x.in", "password": "adminpass123"}).json()["token"]}
+def test_staff_see_internal_events_and_only_admins_see_the_digest(auth_on):
+    seed_user("off", "officer"); seed_user("adm", "admin"); seed_user("pend", "officer", "pending")
     events.record("web-00001", "reopen_proposed", "internal", "staff")
-    assert [e["kind"] for e in client.get("/cases/web-00001/timeline", headers=admin).json()] == ["reopen_proposed"]
-    assert client.get("/admin/summary?days=7", headers=admin).json()["days"] == 7
+    assert [e["kind"] for e in client.get("/cases/web-00001/timeline", headers=bearer("off")).json()] == ["reopen_proposed"]
+    assert client.get("/admin/summary", headers=bearer("off")).status_code == 403
+    assert client.get("/admin/summary?days=7", headers=bearer("adm")).json()["days"] == 7
+    assert client.get("/cases/web-00001/timeline", headers=bearer("pend")).status_code == 403   # pending grants nothing
 
 
-# ---- 11. deployment basics ----------------------------------------------------------------------------------------
-def test_ready_reports_ok_with_stubs_and_503_when_the_engine_is_needed_but_down(monkeypatch):
-    assert client.get("/ready").json()["ok"] is True
-    monkeypatch.setattr(config, "USE_STUBS", False)
-    assert client.get("/ready").status_code == 503
+def test_only_citizens_file_requests(auth_on):
+    seed_user("off", "officer")
+    body = {"category": "pothole", "text": "Deep pothole outside the school gate", "ward": "Kothrud"}
+    assert client.post("/me/requests", json=body).status_code == 401
+    assert client.post("/me/requests", json=body, headers=bearer("off")).status_code == 403
 
 
-def test_similar_check_never_blocks_filing_when_the_engine_is_down():
-    h = _login("c@x.in")
-    assert client.get("/me/requests/similar?category=pothole&text=big+hole", headers=h).json() == []
+def test_a_citizen_cannot_make_a_telegram_link_for_someone_elses_request(auth_on):
+    seed_user("me"); seed_user("other"); link("me", "web-00001")
+    assert client.post("/me/requests/web-00001/telegram-link", headers=bearer("other")).status_code == 403
+    assert client.post("/me/requests/web-00001/telegram-link", headers=bearer("me")).status_code == 200
+
+
+def test_filing_links_the_new_request_to_the_citizen(auth_on, monkeypatch):
+    seed_user("me")
+    monkeypatch.setattr(cases.httpx, "post", lambda *a, **k: httpx.Response(200, json={"ticket_id": "web-00009", "status": "open"}, request=httpx.Request("POST", "http://x")))
+    r = client.post("/me/requests", json={"category": "pothole", "text": "Deep pothole outside the school gate", "ward": "Kothrud"}, headers=bearer("me"))
+    assert r.status_code == 200 and r.json()["ticket"]["ticket_id"] == "web-00009"
+    assert client.get("/auth/me", headers=bearer("me")).json()["ticket_ids"] == ["web-00009"]
+    assert [e["kind"] for e in events.timeline("web-00009", staff=False)] == ["submitted"]
+
+
+# ---- 11. other citizens' wording is never shown ---------------------------------------------------------------------
+def test_similar_check_hides_other_citizens_wording_and_never_blocks_filing(auth_on, monkeypatch):
+    seed_user("me")
+    assert client.get("/me/requests/similar?category=pothole&text=big+hole", headers=bearer("me")).json() == []   # Engine down
+    monkeypatch.setattr(config, "ENGINE_URL", "http://engine.test")
+    hit = [{"ticket_id": "web-1", "text": "private words", "ward": "Kothrud", "status": "open", "similarity": 0.6, "created_at": "t"}]
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: httpx.Response(200, json=hit, request=httpx.Request("GET", "http://x")))
+    got = client.get("/me/requests/similar?category=pothole&text=big+hole&ward=Kothrud", headers=bearer("me")).json()
+    assert got == [{"ward": "Kothrud", "status": "open", "similarity": 0.6, "created_at": "t"}]

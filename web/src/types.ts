@@ -42,6 +42,15 @@ export interface Score {
 }
 export interface TicketWithScore { ticket: Ticket; score: Score }
 
+/** A photo a citizen sent for review. Stored only; it carries no likelihood ratio. */
+export interface CitizenPhoto {
+  evidence_id: string;
+  sha256: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
 export interface Evidence {
   evidence_id: string;
   ticket_id: string;
@@ -98,12 +107,13 @@ export interface Approval {
   status: "pending" | "approved" | "rejected";
   note: string | null;
   engine_result?: { ok: boolean; error?: string } | null;
+  actor_email?: string | null;
   explain?: { summary: string; against: string[]; for: string[]; unknown: string[] };
 }
 
 export interface TimelineEvent { ts: string; kind: string; text: string; audience: "citizen" | "staff" }
 export interface CasePhoto { photo_id: string; received_at: string; data_url: string; details: { flags?: string[]; has_gps?: boolean; distance_m?: number } }
-export interface SimilarRequest { ticket_id: string; text: string; ward: string; status: string; similarity: number }
+export interface SimilarRequest { ward: string; status: string; similarity: number; created_at: string }
 export interface Summary { days: number; counts: Record<string, number>; labels: Record<string, string>; not_fixed_rate: number | null; pending_approvals: number; messages: { pending: number; sent: number; failed: number }; text: string }
 export interface Hotspot { city: string; kind: "ward" | "closer"; key: string; closed: number; reopened: number; rate: number; city_rate: number; ratio: number; p_value: number }
 
@@ -113,3 +123,34 @@ export interface AuditEntry {
 }
 
 export interface WardDot { ward: string; lat: number; lng: number; tickets: number; official_rate: number; reopen_rate: number | null }
+
+// ---- Auth, roles and verification records (contract/AUTH_AND_DEPLOY.md) ----
+export type Role = "citizen" | "officer" | "admin";
+export type AccountStatus = "active" | "pending" | "rejected";
+export interface Me {
+  user_id: string; email: string; role: Role; status: AccountStatus;
+  requested_role: string | null; ticket_ids: string[];
+}
+export interface AdminUser {
+  user_id: string; email: string; role: Role; status: AccountStatus; requested_role: string | null;
+  ticket_ids?: string[]; created_at?: string;
+}
+export interface VerificationCheck {
+  check: "photo" | "satellite" | "citizen" | "human";
+  performed: boolean; skipped_reason: string | null;
+  verdict: "supports_fix" | "contradicts_fix" | "inconclusive" | null;
+  likelihood_ratio: number | null; cost: number | null;
+}
+export interface VerificationRecord {
+  run_id: string | null; ticket_id: string; created_at?: string; status?: string;
+  config_version: string; calibrated: boolean;
+  closure_claimed: string;
+  verification_verdict: "verified_fixed" | "likely_not_fixed" | "cannot_tell" | "not_performed" | "pending";
+  review_state: "none" | "pending" | "approved" | "rejected";
+  prior: number | null; posterior: number | null;
+  checks: VerificationCheck[];
+  provenance: { data_quality?: string; score_type?: string; city?: string };
+  note: string;
+  pending_reason?: string | null;
+}
+export interface ReplyInfo { ticket_id: string; category: string; ward: string; lang: string; status: "open" | "answered" | "expired" }

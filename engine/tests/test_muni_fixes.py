@@ -27,7 +27,7 @@ def test_only_a_closed_ticket_can_be_reopened(env):
     assert client.get("/tickets/mum-1").json()["status"] == "reopened"
     assert client.post("/muni/tickets/mum-1/reopen").status_code == 409     # already reopened
     r = client.post("/muni/tickets/mum-2/reopen")                            # open
-    assert r.status_code == 409 and "only a closed ticket" in r.json()["detail"]
+    assert r.status_code == 409 and "only a closed ticket" in r.json()["error"]["message"]
     assert client.get("/tickets/mum-2").json()["status"] == "open"           # and nothing changed
     assert client.post("/muni/tickets/mum-3/reopen").status_code == 409      # reopened already
 

@@ -4,7 +4,9 @@ the embedder is injectable so tests never download the model. Threshold is hand-
 import numpy as np
 from PIL import Image
 
-DIFFERENT_SCENE = 0.35   # DINOv2 cosine below this -> probably a different place
+from . import config
+
+DIFFERENT_SCENE = config.VC["dino"]["different_scene"]   # DINOv2 cosine below this -> probably a different place
 
 
 class DinoEmbedder:

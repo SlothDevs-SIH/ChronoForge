@@ -4,6 +4,7 @@ Synthetic sources also write truth_<city>.parquet (ground truth, benchmark use o
 Usage (from engine/):   python -m app.ingest mumbai|bengaluru|pune|synthetic|demo|all
 """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -25,7 +26,10 @@ SOURCES = {
 }
 
 
-def ingest(source: ComplaintSource, out_dir: Path = DATA / "warehouse") -> pd.DataFrame:
+def ingest(source: ComplaintSource, out_dir: Path | None = None) -> pd.DataFrame:
+    """Writes into out_dir, else $WAREHOUSE_DIR, else data/warehouse. Re-running replaces the same files (idempotent);
+    municipal status changes live in status_overrides.json, which this never touches."""
+    out_dir = out_dir or Path(os.environ.get("WAREHOUSE_DIR", DATA / "warehouse"))
     out_dir.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(list(source.tickets()))
     df.to_parquet(out_dir / f"tickets_{source.city}.parquet", index=False)

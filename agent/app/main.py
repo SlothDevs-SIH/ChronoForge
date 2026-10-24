@@ -1,36 +1,64 @@
 """Agent service (port 8002). Run: uvicorn app.main:app --port 8002"""
 import asyncio
 import json
-import threading
-
 import httpx
+import threading
 import time
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
 from pydantic import BaseModel
 
-from . import agent, approvals, audit, auth, cases, config, events, explain, outbox, ratelimit, summary, llm, llm_planner, telegram, tools, whatsapp
+from . import agent, approvals, audit, auth, cases, config, db, events, explain, llm, llm_planner, outbox, reply, summary, telegram, tools, uploads, verification, whatsapp
+from .auth import Principal, authorize_ticket, principal, require_active, require_staff, staff_human, staff_or_admin_token, valid_ticket_id
 from .db import get_conn, lock
+from .http_utils import RequestContextMiddleware, api_error, rate_limit, register_error_handlers, setup_logging
 from .models import DecideRequest, PhotoRequest
 from .photo import PhotoIndex, check_ref_allowed, verify_photo
 
-def require_admin(x_admin_token: str | None = Header(default=None)):
-    """Optional shared secret (AGENT_ADMIN_TOKEN). Unset = open, which is only acceptable on a laptop demo."""
-    if config.ADMIN_TOKEN and x_admin_token != config.ADMIN_TOKEN:
-        raise HTTPException(403, "admin token required")
+# Endpoints that message people or read local files: an approved officer or admin, or the shared admin token (scripts).
+require_admin = staff_or_admin_token
+
+app = FastAPI(title="TrueClose Agent service", version="0.3.0")
+# CORS: an explicit allowlist in production (CORS_ORIGINS); "*" only for local runs. Bearer tokens, no cookies.
+app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS or ["*"], allow_credentials=False,
+                   allow_methods=["*"], allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID", "X-Admin-Token"],
+                   expose_headers=["X-Request-ID"])
+app.add_middleware(RequestContextMiddleware)   # outermost: every response, including errors, carries X-Request-ID
+register_error_handlers(app)
+app.include_router(auth.router)
+app.include_router(verification.router)
+app.include_router(reply.router)
+app.include_router(uploads.router)
 
 
-app = FastAPI(title="TrueClose Agent service")
-app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
+@app.on_event("startup")
+def _logging():
+    setup_logging()
 
 
 @app.get("/health")
 def health():
     return {"ok": True, "service": "agent", "stubs": config.USE_STUBS}
+
+
+@app.get("/ready")
+def ready():
+    """Ready to serve: the database answers and, when sign-in is required, it is configured."""
+    problems = []
+    try:
+        backend = db.ping()
+    except Exception as exc:
+        backend = None
+        problems.append(f"database unreachable ({type(exc).__name__})")
+    if config.AUTH_REQUIRED and not (config.SUPABASE_JWT_SECRET or config.SUPABASE_URL):
+        problems.append("AUTH_REQUIRED is on but neither SUPABASE_JWT_SECRET nor SUPABASE_URL is set")
+    if problems:
+        return JSONResponse({"ok": False, "service": "agent", "problems": problems}, status_code=503)
+    return {"ok": True, "service": "agent", "database": backend, "auth_required": config.AUTH_REQUIRED}
 
 
 @app.post("/evidence/photo", dependencies=[Depends(require_admin)])
@@ -173,15 +201,33 @@ def whatsapp_webhook(payload: dict):
     return {"ok": True, "run_ids": run_ids}
 
 
-@app.post("/agent/run/{ticket_id}", dependencies=[Depends(auth.require_role("officer", "admin"))])
-def run_ticket(ticket_id: str):
+def _ticket_of_run(run_id: str) -> str:
+    run = agent.RUNS.get(run_id)
+    if run is not None:
+        return run.ticket_id
+    row = get_conn().execute("SELECT ticket_id FROM runs WHERE run_id=?", (run_id,)).fetchone()
+    if row is None:
+        raise api_error(404, "not_found", "unknown run")
+    return row["ticket_id"]
+
+
+def _authorize_run(p: Principal, run_id: str) -> None:
+    """Runs belong to staff; anonymous visitors may follow DEMO-* runs only when PUBLIC_DEMO_RUNS=1."""
+    authorize_ticket(p, _ticket_of_run(run_id), public_demo=True, citizen_ok=False)
+
+
+@app.post("/agent/run/{ticket_id}")
+def run_ticket(ticket_id: str, p: Principal = Depends(principal)):
+    valid_ticket_id(ticket_id)
+    authorize_ticket(p, ticket_id, public_demo=True, citizen_ok=False)
     run_id = agent.start_run(ticket_id)
     agent.run_in_background(run_id)
     return {"run_id": run_id}
 
 
 @app.get("/agent/stream/{run_id}")
-async def stream(run_id: str):
+async def stream(run_id: str, p: Principal = Depends(principal)):
+    _authorize_run(p, run_id)
     run = agent.RUNS.get(run_id)
     if run is None:
         row = get_conn().execute("SELECT status, trace FROM runs WHERE run_id=?", (run_id,)).fetchone()
@@ -209,7 +255,8 @@ async def stream(run_id: str):
 
 
 @app.get("/agent/runs/{run_id}")
-def get_run(run_id: str):
+def get_run(run_id: str, p: Principal = Depends(principal)):
+    _authorize_run(p, run_id)
     run = agent.RUNS.get(run_id)
     if run is not None:
         return {"run_id": run_id, "ticket_id": run.ticket_id, "status": run.status,
@@ -221,7 +268,7 @@ def get_run(run_id: str):
             "trace": json.loads(r["trace"]), "verdict": json.loads(r["verdict"]) if r["verdict"] else None}
 
 
-@app.get("/approvals", dependencies=[Depends(auth.require_role("officer", "admin"))])
+@app.get("/approvals", dependencies=[Depends(require_staff)])
 def list_approvals(status: str | None = "pending"):
     out = approvals.list_approvals(status)
     for a in out:   # plain-language reasons, built only from the recorded evidence
@@ -229,110 +276,33 @@ def list_approvals(status: str | None = "pending"):
     return out
 
 
-@app.post("/approvals/{approval_id}/decide", dependencies=[Depends(require_admin), Depends(auth.require_role("officer", "admin"))])
-def decide(approval_id: str, req: DecideRequest):
+@app.post("/approvals/{approval_id}/decide")
+def decide(approval_id: str, req: DecideRequest, p: Principal = Depends(staff_human)):
+    """Only a person decides, and the decision records who: user id, email, time and note (also in the audit chain)."""
     try:
-        return approvals.decide(approval_id, req.decision, req.note)
+        return approvals.decide(approval_id, req.decision, req.note, {"user_id": p.user_id, "email": p.email})
     except KeyError:
         raise HTTPException(404, "unknown approval")
     except ValueError as exc:
         raise HTTPException(409, str(exc))
 
 
-@app.get("/outcomes", dependencies=[Depends(auth.require_role("officer", "admin"))])
+@app.get("/outcomes", dependencies=[Depends(require_staff)])
 def outcomes():
     return approvals.outcomes()
 
 
-@app.get("/audit", dependencies=[Depends(auth.require_role("officer", "admin"))])
+@app.get("/audit", dependencies=[Depends(require_staff)])
 def get_audit(limit: int = 500):
     return audit.entries(limit)
 
 
-@app.get("/audit/verify")
+@app.get("/audit/verify", dependencies=[Depends(require_staff)])
 def verify_audit():
     return audit.verify()
 
 
-class RegisterRequest(BaseModel):
-    email: str
-    name: str
-    password: str
-    role: str = "citizen"
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-class StatusRequest(BaseModel):
-    status: str
-
-
-class TicketRef(BaseModel):
-    ticket_id: str
-
-
-@app.on_event("startup")
-def seed_first_admin():
-    auth.seed_admin()
-
-
-@app.post("/auth/register", dependencies=[Depends(ratelimit.limit("register", 8, 60))])
-def register(req: RegisterRequest):
-    try:
-        return auth.register(req.email, req.name, req.password, req.role)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-
-
-@app.post("/auth/login", dependencies=[Depends(ratelimit.limit("login", 10, 60))])
-def login(req: LoginRequest):
-    try:
-        return auth.login(req.email, req.password)
-    except PermissionError as exc:
-        raise HTTPException(401, str(exc))
-
-
-@app.get("/auth/me")
-def me(user=Depends(auth.current_user)):
-    if user is None:
-        raise HTTPException(401, "sign in required")
-    return user
-
-
-@app.get("/admin/users")
-def admin_users(_=Depends(auth.require_role("admin"))):
-    return auth.list_users()
-
-
-@app.post("/admin/users/{user_id}/status")
-def admin_set_status(user_id: str, req: StatusRequest, _=Depends(auth.require_role("admin"))):
-    if req.status not in ("active", "disabled"):
-        raise HTTPException(400, "status must be active or disabled")
-    try:
-        return auth.set_status(user_id, req.status)
-    except KeyError:
-        raise HTTPException(404, "unknown user")
-    except ValueError as exc:
-        raise HTTPException(409, str(exc))
-
-
-@app.get("/me/tickets")
-def my_tickets(user=Depends(auth.require_role("citizen"))):
-    return auth.my_tickets(user["user_id"])
-
-
-@app.post("/me/tickets")
-def add_my_ticket(req: TicketRef, user=Depends(auth.require_role("citizen"))):
-    try:
-        auth.add_ticket(user["user_id"], req.ticket_id)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    return auth.my_tickets(user["user_id"])
-
-
+# ---- website requests, case tracking and the features around them ------------------------------------------------
 class NewCase(BaseModel):
     category: str
     text: str
@@ -341,97 +311,86 @@ class NewCase(BaseModel):
     lng: float | None = None
 
 
+def citizen_only(p: Principal = Depends(require_active)) -> Principal:
+    """Filing a request is for citizens (and the open local demo). Staff work the queue instead."""
+    if p.role != "citizen" and not p.local:
+        raise api_error(403, "forbidden", "Only citizen accounts file requests.")
+    return p
+
+
 @app.on_event("startup")
 def start_case_watcher():
     cases.start_watcher()
 
 
-@app.post("/me/requests")
-def submit_request(req: NewCase, user=Depends(auth.require_role("citizen"))):
-    """A citizen files a request on the website. Returns the ticket and a one-time link that connects Telegram."""
-    ratelimit.check_user("request", user["user_id"], config.REQUESTS_PER_HOUR, 3600)
+@app.post("/me/requests", dependencies=[Depends(rate_limit("request", config.REQUESTS_PER_HOUR, 3600))])
+def submit_request(req: NewCase, p: Principal = Depends(citizen_only)):
+    """A citizen files a request on the website. It becomes a ticket linked to them, plus a one-time Telegram link."""
     try:
-        return cases.submit(user["user_id"], req.category, req.text, req.ward, req.lat, req.lng)
+        return cases.submit(p.user_id, req.category, req.text, req.ward, req.lat, req.lng)
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise api_error(400, "bad_request", str(exc))
     except ConnectionError as exc:
-        raise HTTPException(503, str(exc))
+        raise api_error(503, "unavailable", str(exc))
 
 
 @app.post("/me/requests/{ticket_id}/telegram-link")
-def telegram_link(ticket_id: str, user=Depends(auth.require_role("citizen"))):
-    if ticket_id not in auth.my_tickets(user["user_id"]):
-        raise HTTPException(404, "unknown request")
+def telegram_link(ticket_id: str, p: Principal = Depends(citizen_only)):
+    valid_ticket_id(ticket_id)
+    authorize_ticket(p, ticket_id)   # a citizen only for a request linked to them
     return cases.new_link(ticket_id)
 
 
-@app.post("/admin/requests/{ticket_id}/close")
-def admin_close_request(ticket_id: str, _=Depends(auth.require_role("admin"))):
-    """Demo: stand in for the city closing a website request, which the watcher then picks up."""
+@app.get("/me/requests/similar")
+def similar_requests(category: str, text: str, ward: str = "", p: Principal = Depends(citizen_only)):
+    """Before filing: are there open website requests that look like the same problem? Only the place, status and
+    closeness are returned, never another citizen's wording or ticket id."""
     try:
-        return cases.close_for_demo(ticket_id)
-    except ValueError as exc:
-        raise HTTPException(409, str(exc))
+        r = httpx.get(f"{config.ENGINE_URL}/requests/similar", params={"category": category, "text": text, "ward": ward},
+                      headers=cases.engine_headers(), timeout=5)
+        r.raise_for_status()
+        return [{"ward": x["ward"], "status": x["status"], "similarity": x["similarity"], "created_at": x["created_at"]} for x in r.json()]
     except Exception:
-        raise HTTPException(503, "the Engine is not reachable")
-
-
-@app.get("/ready")
-def ready():
-    """Readiness for a host's health check: the database answers and the Engine is reachable (if real services are on)."""
-    problems = []
-    try:
-        get_conn().execute("SELECT 1").fetchone()
-    except Exception:
-        problems.append("database")
-    if not config.USE_STUBS:
-        try:
-            httpx.get(f"{config.ENGINE_URL}/health", timeout=3).raise_for_status()
-        except Exception:
-            problems.append("engine")
-    if problems:
-        raise HTTPException(503, "not ready: " + ", ".join(problems))
-    return {"ok": True, "auth_secret_set": bool(config.AUTH_SECRET), "telegram": bool(config.TELEGRAM_BOT_TOKEN)}
-
-
-@app.post("/approvals/{approval_id}/retry", dependencies=[Depends(auth.require_role("officer", "admin"))])
-def retry_approval(approval_id: str):
-    try:
-        return approvals.retry(approval_id)
-    except KeyError:
-        raise HTTPException(404, "unknown approval")
-    except ValueError as exc:
-        raise HTTPException(409, str(exc))
+        return []   # a convenience: when it cannot run, filing must still work
 
 
 @app.get("/cases/{ticket_id}/timeline")
-def case_timeline_staff(ticket_id: str, _=Depends(auth.require_role("officer", "admin"))):
-    return events.timeline(ticket_id, staff=True)
+def case_timeline(ticket_id: str, p: Principal = Depends(require_active)):
+    """The case history. Citizens (for their own request) see the citizen-visible entries; staff see everything."""
+    valid_ticket_id(ticket_id)
+    authorize_ticket(p, ticket_id)
+    return events.timeline(ticket_id, staff=p.staff or p.local)
 
 
-@app.get("/me/requests/{ticket_id}/timeline")
-def case_timeline_citizen(ticket_id: str, user=Depends(auth.require_role("citizen"))):
-    if ticket_id not in auth.my_tickets(user["user_id"]):
-        raise HTTPException(404, "unknown request")
-    return events.timeline(ticket_id, staff=False)
-
-
-@app.get("/cases/{ticket_id}/photos")
-def case_photos(ticket_id: str, _=Depends(auth.require_role("officer", "admin"))):
+@app.get("/cases/{ticket_id}/photos", dependencies=[Depends(require_staff)])
+def case_photos(ticket_id: str):
+    valid_ticket_id(ticket_id)
     return cases.photos_for(ticket_id)
 
 
-@app.get("/me/requests/similar")
-def similar_requests(category: str, text: str, ward: str = "", user=Depends(auth.require_role("citizen"))):
-    """Before filing: open website requests that look like the same problem, so the citizen can follow one instead."""
+@app.post("/approvals/{approval_id}/retry")
+def retry_approval(approval_id: str, p: Principal = Depends(staff_human)):
+    """An approved action the city system did not carry out: try it again."""
     try:
-        r = httpx.get(f"{config.ENGINE_URL}/requests/similar", params={"category": category, "text": text, "ward": ward}, timeout=5)
-        r.raise_for_status()
-        return r.json()
-    except Exception:
-        return []   # the check is a convenience: if it cannot run, filing must still work
+        return approvals.retry(approval_id)
+    except KeyError:
+        raise api_error(404, "not_found", "unknown approval")
+    except ValueError as exc:
+        raise api_error(409, "conflict", str(exc))
 
 
 @app.get("/admin/summary")
-def admin_summary(days: int = 7, _=Depends(auth.require_role("admin"))):
+def admin_summary(days: int = 7, p: Principal = Depends(auth.require_admin)):
     return summary.build(max(1, min(days, 365)))
+
+
+@app.post("/admin/requests/{ticket_id}/close")
+def admin_close_request(ticket_id: str, p: Principal = Depends(auth.require_admin)):
+    """Demo: stand in for the city closing a website request, which the watcher then picks up."""
+    valid_ticket_id(ticket_id)
+    try:
+        return cases.close_for_demo(ticket_id)
+    except ValueError as exc:
+        raise api_error(409, "conflict", str(exc))
+    except Exception:
+        raise api_error(503, "unavailable", "the Engine is not reachable")

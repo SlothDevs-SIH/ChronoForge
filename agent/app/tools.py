@@ -8,6 +8,8 @@ from . import config, telegram
 from .models import Evidence, Score
 from .photo import PhotoIndex, verify_photo
 
+_STUB = config.VC["stub_lr"]   # stub-only numbers (AGENT_USE_STUBS=1), kept with the other configured values
+
 
 def _h(ticket_id: str, salt: str = "") -> int:
     return int(hashlib.sha256((salt + ticket_id).encode()).hexdigest()[:8], 16)
@@ -23,6 +25,8 @@ class EngineUnavailable(RuntimeError):
 
 
 def _engine(method: str, path: str, timeout: float = 5, **kw):
+    if config.ENGINE_SERVICE_TOKEN:   # the Engine only talks to the Agent through this shared secret
+        kw["headers"] = {**kw.get("headers", {}), "X-Service-Token": config.ENGINE_SERVICE_TOKEN}
     r = httpx.request(method, config.ENGINE_URL + path, timeout=timeout, **kw)
     r.raise_for_status()
     return r.json()
@@ -67,7 +71,7 @@ def check_photo(ticket_id: str, closure_photo_url: str | None = None) -> Evidenc
     bad = stub_truth_false(ticket_id)
     return Evidence(ticket_id=ticket_id, check="photo",
                     verdict="contradicts_fix" if bad else "supports_fix",
-                    likelihood_ratio=5.0 if bad else 0.4, confidence=0.7,
+                    likelihood_ratio=_STUB["photo"]["bad"] if bad else _STUB["photo"]["good"], confidence=0.7,
                     cost=config.TOOL_COSTS["check_photo"], details={"stub": True})
 
 
@@ -88,7 +92,7 @@ def check_satellite(ticket_id: str, eligible: bool) -> Evidence:
     bad = stub_truth_false(ticket_id)
     return Evidence(ticket_id=ticket_id, check="satellite",
                     verdict="contradicts_fix" if bad else "supports_fix",
-                    likelihood_ratio=4.0 if bad else 0.35, confidence=0.6,
+                    likelihood_ratio=_STUB["satellite"]["bad"] if bad else _STUB["satellite"]["good"], confidence=0.6,
                     cost=config.TOOL_COSTS["check_satellite"], details={"stub": True})
 
 
@@ -111,7 +115,7 @@ def ask_citizen(ticket_id: str) -> Evidence:
     bad = stub_truth_false(ticket_id)
     return Evidence(ticket_id=ticket_id, check="citizen",
                     verdict="contradicts_fix" if bad else "supports_fix",
-                    likelihood_ratio=6.0 if bad else 0.3, confidence=0.75,
+                    likelihood_ratio=_STUB["citizen"]["bad"] if bad else _STUB["citizen"]["good"], confidence=0.75,
                     cost=config.TOOL_COSTS["ask_citizen"], details={"stub": True, "channel": "stub"})
 
 
@@ -119,5 +123,5 @@ def request_human_spot_check(ticket_id: str) -> Evidence:
     bad = stub_truth_false(ticket_id)
     return Evidence(ticket_id=ticket_id, check="human",
                     verdict="contradicts_fix" if bad else "supports_fix",
-                    likelihood_ratio=20.0 if bad else 0.05, confidence=0.95,
+                    likelihood_ratio=_STUB["human"]["bad"] if bad else _STUB["human"]["good"], confidence=0.95,
                     cost=config.TOOL_COSTS["request_human_spot_check"], details={"stub": True})

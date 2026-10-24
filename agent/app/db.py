@@ -1,4 +1,10 @@
-"""SQLite storage via plain sqlite3. Schema lives in agent/sql/schema.sql (human-reviewed)."""
+"""Storage. SQLite (plain sqlite3) is the default for local runs and tests; Postgres is used when DATABASE_URL is set.
+
+Postgres mode never creates tables: a person runs agent/sql/schema_postgres.sql once (Supabase SQL editor). The thin
+adapter below lets every existing call site keep using `get_conn().execute("... ? ...", params)`, `.fetchone()`,
+`.fetchall()`, `.commit()` and `cur.lastrowid`.
+"""
+import re
 import sqlite3
 import threading
 from pathlib import Path
@@ -6,20 +12,115 @@ from . import config
 
 _SCHEMA = Path(__file__).resolve().parent.parent / "sql" / "schema.sql"
 _lock = threading.RLock()
-_conn: sqlite3.Connection | None = None
+_conn = None   # sqlite3.Connection or PgConnection
+
+# INSERT OR REPLACE (SQLite) becomes an upsert on these primary keys in Postgres
+_UPSERT_KEYS = {"kv": "k", "citizen_requests": "ticket_id"}
+_INSERT_OR_REPLACE = re.compile(r"^\s*INSERT\s+OR\s+REPLACE\s+INTO\s+(\w+)\s*\(([^)]*)\)\s*(VALUES.*)$", re.I | re.S)
+
+# columns added after the first release of a table; applied to existing SQLite files only (Postgres uses the schema file)
+_SQLITE_ADDED_COLUMNS = {
+    "approvals": [("actor", "TEXT"), ("actor_email", "TEXT")],
+}
 
 
-def get_conn() -> sqlite3.Connection:
+def translate_sql(sql: str) -> tuple[str, bool]:
+    """SQLite dialect -> Postgres. Returns (sql, wants_returning_idx)."""
+    returning = False
+    m = _INSERT_OR_REPLACE.match(sql)
+    if m:
+        table, cols, rest = m.group(1), [c.strip() for c in m.group(2).split(",")], m.group(3)
+        key = _UPSERT_KEYS[table]
+        sets = ", ".join(f"{c}=EXCLUDED.{c}" for c in cols if c != key)
+        sql = f"INSERT INTO {table} ({', '.join(cols)}) {rest} ON CONFLICT ({key}) DO UPDATE SET {sets}"
+    if re.match(r"^\s*INSERT\s+INTO\s+audit\b", sql, re.I) and "RETURNING" not in sql.upper():
+        sql, returning = sql.rstrip().rstrip(";") + " RETURNING idx", True
+    return sql.replace("?", "%s"), returning
+
+
+class _PgCursor:
+    def __init__(self, cur, lastrowid=None):
+        self._cur, self.lastrowid = cur, lastrowid
+
+    def fetchone(self):
+        return self._cur.fetchone() if self._cur.description else None
+
+    def fetchall(self):
+        return self._cur.fetchall() if self._cur.description else []
+
+
+class PgConnection:
+    """One shared psycopg connection guarded by the module lock, reconnecting once if the server dropped it."""
+
+    def __init__(self, url: str):
+        self.url = url
+        self._c = None
+        self._connect()
+
+    def _connect(self):
+        import psycopg
+        from psycopg.rows import dict_row
+        self._c = psycopg.connect(self.url, row_factory=dict_row, autocommit=False)
+
+    def execute(self, sql: str, params=()):
+        import psycopg
+        sql, returning = translate_sql(sql)
+        for attempt in (0, 1):
+            try:
+                cur = self._c.execute(sql, tuple(params))
+                last = cur.fetchone()["idx"] if returning else None
+                return _PgCursor(cur, last)
+            except psycopg.OperationalError:
+                if attempt:
+                    raise
+                self._connect()
+            except Exception:
+                self._c.rollback()   # a failed statement must not poison the next one
+                raise
+
+    def commit(self):
+        self._c.commit()
+
+    def close(self):
+        if self._c is not None:
+            self._c.close()
+
+
+def is_postgres() -> bool:
+    return bool(config.DATABASE_URL)
+
+
+def _migrate_sqlite(conn: sqlite3.Connection) -> None:
+    for table, cols in _SQLITE_ADDED_COLUMNS.items():
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        for name, typ in cols:
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {typ}")
+    conn.commit()
+
+
+def get_conn():
     global _conn
     if _conn is None:
-        _conn = sqlite3.connect(config.DB_PATH, check_same_thread=False)
-        _conn.row_factory = sqlite3.Row
-        _conn.executescript(_SCHEMA.read_text())
+        if is_postgres():
+            _conn = PgConnection(config.DATABASE_URL)   # tables come from agent/sql/schema_postgres.sql
+        else:
+            _conn = sqlite3.connect(config.DB_PATH, check_same_thread=False)
+            _conn.row_factory = sqlite3.Row
+            _conn.executescript(_SCHEMA.read_text())
+            _migrate_sqlite(_conn)
     return _conn
 
 
 def lock() -> threading.RLock:
     return _lock
+
+
+def ping() -> str:
+    """Raise if the database cannot answer; return the backend name. Used by /ready."""
+    with _lock:
+        get_conn().execute("SELECT 1").fetchone()
+    return "postgres" if is_postgres() else "sqlite"
 
 
 def reset(path: str | None = None) -> None:

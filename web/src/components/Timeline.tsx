@@ -7,11 +7,11 @@ const when = (ts: string) => {
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 };
 
-/** The case history, newest last. `staff` also shows internal entries (decisions, delivery problems). */
-export default function Timeline({ ticketId, staff = false }: { ticketId: string; staff?: boolean }) {
+/** The case history, newest last. The server decides what the viewer may see: staff also get internal entries. */
+export default function Timeline({ ticketId }: { ticketId: string }) {
   const { data, error, isLoading } = useQuery({
-    queryKey: ["timeline", staff ? "staff" : "me", ticketId],
-    queryFn: () => (staff ? api.caseTimeline(ticketId) : api.myTimeline(ticketId)),
+    queryKey: ["timeline", ticketId],
+    queryFn: () => api.caseTimeline(ticketId),
     refetchInterval: 8000,
     retry: false,
   });

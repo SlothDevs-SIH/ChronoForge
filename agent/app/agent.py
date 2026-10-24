@@ -6,7 +6,9 @@ import time
 from typing import Callable
 from uuid import uuid4
 
-from . import approvals, audit, config, events, fusion, tools
+import logging
+
+from . import approvals, audit, config, events, fusion, tools, verification
 from .db import get_conn, lock
 from .models import Evidence, TraceEvent, Verdict, now_iso
 from .planner import CHECK_OF_TOOL, PlanState, choose_next, validate_choice
@@ -147,6 +149,10 @@ def execute(run_id: str, planner: Planner | None = None, delay: float | None = N
         run.verdict = verdict
         run.emit("verdict", f"{st}: {verdict.explanation}")
         audit.append("verdict", {"run_id": run_id, **verdict.model_dump()})
+        try:   # persist what the run did (checks performed or skipped, ratios, config version); never blocks the verdict
+            verification.record_run(run, verdict, prior, source, score)
+        except Exception:
+            logging.getLogger("trueclose.verification").exception("could not persist the verification run")
         if st == "likely_not_fixed":
             approval = approvals.propose_action(run.ticket_id, run_id, "reopen", verdict)
             run.emit("approval_needed", f"reopen proposed, awaiting human approval {approval['approval_id']}",
@@ -161,6 +167,10 @@ def execute(run_id: str, planner: Planner | None = None, delay: float | None = N
     except Exception as exc:  # surface failures in the trace instead of a silent dead stream
         run.status = "error"
         run.emit("thought", f"run failed: {exc}")
+        try:   # a run that cannot finish is stored as pending with its reason: no scores are invented
+            verification.record_pending(run, str(exc))
+        except Exception:
+            logging.getLogger("trueclose.verification").exception("could not persist the pending run")
         raise
     finally:
         _persist_run(run)
