@@ -148,3 +148,25 @@ def test_offset_is_saved_and_reloaded():
     assert main._load_offset() == 1234
     main._save_offset(1300)
     assert main._load_offset() == 1300
+
+
+# --- two open questions in one chat made a typed reply ambiguous ---------------------------------------------------
+def test_only_one_question_is_open_per_chat(monkeypatch):
+    monkeypatch.setattr(config, "TELEGRAM_BOT_TOKEN", "")
+    for tid in ("q1", "q2"):
+        telegram.register_contact(tid, 42)
+        telegram.send_request(tid, "pothole", "x", "y", sender=lambda c, t: None)
+    assert telegram.get_request("q1")["status"] == "superseded" and telegram.get_request("q2")["status"] == "asked"
+    ev = telegram.handle_update({"message": {"chat": {"id": 42}, "text": "2"}})        # typed: unambiguous
+    assert ev.ticket_id == "q2"
+    old_button = {"callback_query": {"id": "c", "data": "ans:q1:1", "message": {"message_id": 1, "chat": {"id": 42}}}}
+    assert telegram.handle_update(old_button) is None and telegram.get_request("q1")["status"] == "superseded"
+    assert any(e["event"]["type"] == "citizen_question_superseded" for e in audit.entries(200))
+
+
+def test_a_new_question_in_another_chat_does_not_withdraw_this_one():
+    telegram.register_contact("a", 1)
+    telegram.send_request("a", "pothole", "x", "y", sender=lambda c, t: None)
+    telegram.register_contact("b", 2)
+    telegram.send_request("b", "pothole", "x", "y", sender=lambda c, t: None)
+    assert telegram.get_request("a")["status"] == "asked" and telegram.get_request("b")["status"] == "asked"

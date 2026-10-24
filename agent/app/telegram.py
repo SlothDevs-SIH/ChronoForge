@@ -108,9 +108,19 @@ def send_request(ticket_id: str, category: str, area: str, date: str,
     else:
         send_message(row["chat_id"], text, answer_buttons(ticket_id, row["lang"]))
     with lock():
+        # one open question per chat: a typed "2" must never be ambiguous. Older open questions are withdrawn, and
+        # their buttons answer "no longer open" (see the stale-button path in handle_reply).
+        superseded = get_conn().execute(
+            "SELECT ticket_id FROM citizen_requests WHERE chat_id=? AND channel=? AND status='asked' AND ticket_id!=?",
+            (row["chat_id"], row["channel"], ticket_id)).fetchall()
+        get_conn().execute("UPDATE citizen_requests SET status='superseded' WHERE chat_id=? AND channel=? "
+                           "AND status='asked' AND ticket_id!=?", (row["chat_id"], row["channel"], ticket_id))
         get_conn().execute("UPDATE citizen_requests SET status='asked', asked_at=? WHERE ticket_id=?",
                            (now_iso(), ticket_id))
         get_conn().commit()
+    for old_row in superseded:
+        audit.append("citizen_question_superseded", {"ticket_id": old_row["ticket_id"], "by": ticket_id,
+                                                     "chat_hash": row["chat_hash"]})
     audit.append("citizen_message_sent", {"ticket_id": ticket_id, "chat_hash": row["chat_hash"]})
     return True
 
