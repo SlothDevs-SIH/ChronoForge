@@ -45,9 +45,10 @@ def get_score(ticket_id: str) -> tuple[Score, str]:
 
 def _get_ticket(ticket_id: str) -> dict | None:
     try:
-        return _engine("GET", f"/tickets/{ticket_id}")
+        t = _engine("GET", f"/tickets/{ticket_id}")
     except Exception:
         return None
+    return t
 
 
 def check_photo(ticket_id: str, closure_photo_url: str | None = None) -> Evidence:

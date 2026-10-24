@@ -48,9 +48,9 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [ ] **Milestone:** full demo
 
 ## Phase 6: Calibration and polish
-- [ ] Calibrate likelihood ratios on `data/benchmark_v1.parquet`
-- [ ] Cost-vs-accuracy experiment (harness done on stub data; needs real benchmark numbers)
-- [ ] Dockerfile / docker-compose (written, not built: no Docker here); deploy still to do
+- [ ] Calibrate likelihood ratios: NOT meaningful yet. Soham's benchmark is synthetic injection (caught by construction), so hand-set LRs stay and are labelled as such
+- [x] Cost-vs-accuracy harness on real tools over the 12-ticket demo set (illustration, not a result): experiments/cost_demo_set.py
+- [x] Dockerfile builds from repo root (written, not built: no Docker here); deploy deliberately not done yet
 - [x] (stretch) DINOv2-small second embedding (code + tests; real model not downloaded yet)
 - [x] (stretch) Skeptic call on final verdict (AGENT_USE_SKEPTIC=1)
 - [x] (stretch) Voice notes via hosted API (Gemini audio, not Whisper; code + tests)
@@ -63,3 +63,7 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 ## Working rules
 - All commits are authored by Ayush More only. No co-author trailers.
 - Secrets live in `.env`, never in git.
+
+## Backend bug review (24 Oct, fixed in the Agent; Engine items go to Soham)
+Fixed with a regression test each (`agent/tests/test_bug_regressions.py`): slow bot replies (a new TLS connection per Telegram call, 1.4 to 2.5 s each, 4 calls per tap), a button applying to the wrong ticket, "no problem, fixed" read as not fixed, duplicate pending approvals after a re-run, an approved action that failed still starting the outcome clock, lost photo hashes between concurrent runs, the photo API reading any local file or internal URL, unauthenticated messaging and approval endpoints (optional `AGENT_ADMIN_TOKEN`), Telegram offset not persisted (old taps replayed after a restart), `/agent/stream` 404 after a restart, unbounded in-memory runs.
+For Soham (not changed by me): `POST /muni/tickets/{id}/reopen` reopens an OPEN ticket; municipal status changes live in memory and vanish on an Engine restart; `POST /connectors/{name}/sync` is unauthenticated and heavy; `min_score` accepts values outside 0 to 1.

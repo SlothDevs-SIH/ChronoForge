@@ -34,9 +34,13 @@ class RunState:
 
 
 RUNS: dict[str, RunState] = {}
+MAX_RUNS_IN_MEMORY = 300
 
 
 def start_run(ticket_id: str) -> str:
+    if len(RUNS) >= MAX_RUNS_IN_MEMORY:   # finished runs stay readable from the database; drop the oldest in memory
+        for old in [k for k, r in RUNS.items() if r.status != "running"][: len(RUNS) - MAX_RUNS_IN_MEMORY + 1]:
+            RUNS.pop(old, None)
     run_id = str(uuid4())
     RUNS[run_id] = RunState(run_id, ticket_id)
     with lock():
@@ -85,9 +89,13 @@ def execute(run_id: str, planner: Planner | None = None, delay: float | None = N
 
         steps = 0
         # contract: the score alone never gives a verdict, so keep checking until one check is conclusive
-        while (fusion.is_uncertain(posterior) or not _conclusive(run.evidence)) and steps < config.MAX_STEPS:
+        while (fusion.is_uncertain(posterior) or not _conclusive(run.evidence)
+               or _photo_gate_open(posterior, state)) and steps < config.MAX_STEPS:
             steps += 1
-            tool, why = planner(state)
+            if _photo_gate_open(posterior, state):   # never confirm a fix on one answer: look at the closure photo
+                tool, why = "check_photo", "a closure is never confirmed as fixed without checking its photo (cost 1)"
+            else:
+                tool, why = planner(state)
             if tool is None:
                 run.emit("thought", why)
                 break
@@ -151,6 +159,12 @@ def execute(run_id: str, planner: Planner | None = None, delay: float | None = N
     finally:
         _persist_run(run)
     return verdict
+
+
+def _photo_gate_open(posterior: float, state: PlanState) -> bool:
+    """True when the evidence says 'fixed' but the cheap photo check has not run yet and is affordable."""
+    return (posterior <= config.THRESH_FIXED and "check_photo" not in state.used
+            and config.TOOL_COSTS["check_photo"] <= state.budget_left)
 
 
 def _conclusive(evidence: list[Evidence]) -> bool:

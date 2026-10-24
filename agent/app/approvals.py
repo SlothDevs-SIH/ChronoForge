@@ -16,6 +16,17 @@ ACTIONS = {"reopen", "escalate"}
 def propose_action(ticket_id: str, run_id: str | None, action: str, verdict: Verdict) -> dict:
     if action not in ACTIONS:
         raise ValueError(f"unknown action {action}")
+    with lock():
+        existing = get_conn().execute(
+            "SELECT approval_id FROM approvals WHERE ticket_id=? AND action=? AND status='pending'",
+            (ticket_id, action)).fetchone()
+        if existing:   # a re-run (for example after a citizen reply) refreshes the open item instead of duplicating it
+            get_conn().execute("UPDATE approvals SET verdict_snapshot=?, run_id=? WHERE approval_id=?",
+                               (verdict.model_dump_json(), run_id, existing["approval_id"]))
+            get_conn().commit()
+            audit.append("approval_refreshed", {"approval_id": existing["approval_id"], "ticket_id": ticket_id,
+                                                "action": action})
+            return get(existing["approval_id"])
     approval_id = str(uuid4())
     with lock():
         get_conn().execute(
@@ -74,7 +85,11 @@ def decide(approval_id: str, decision: str, note: str = "") -> dict:
                                       "decision": decision, "note": note})
     if decision == "approve":
         _record_prediction(a)
-        if config.OUTCOME_CHECK_DELAY > 0:
+        if engine_result and not engine_result.get("ok"):
+            # the human approved but the municipal system did not act: say so, and start no outcome clock
+            audit.append("action_failed", {"approval_id": approval_id, "ticket_id": a["ticket_id"],
+                                           "error": engine_result.get("error", "")[:200]})
+        elif config.OUTCOME_CHECK_DELAY > 0:
             threading.Timer(config.OUTCOME_CHECK_DELAY, run_outcome_check, args=(approval_id,)).start()
     return get(approval_id)
 
