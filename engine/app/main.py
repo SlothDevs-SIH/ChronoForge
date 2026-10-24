@@ -6,6 +6,7 @@ falls back to the contract fixtures. GET /health says which mode is active.
 Run: uvicorn app.main:app --port 8001 --reload   (from engine/)
 """
 import re
+from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -84,6 +85,23 @@ def satellite_chip(ticket_id: str, which: Literal["before", "after"]):
     if not path.exists():
         raise HTTPException(404, "no chip for this ticket yet: run /satellite/check first")
     return FileResponse(path, media_type="image/png")
+
+
+DEMO_PHOTOS = Path(__file__).resolve().parents[2] / "demo" / "photos"
+
+
+@app.get("/media/demo/{ticket_id}/{which}.jpg")
+def demo_photo(ticket_id: str, which: Literal["before", "after"]):
+    """The demo set's own photos (open-licence Wikimedia Commons, see demo/photos/ATTRIBUTION.md). Only files the ticket
+    row points at, and only inside demo/photos/."""
+    t = store.get_ticket(ticket_id)
+    rel = None if t is None else (t.complaint_photo_url if which == "before" else t.closure_photo_url)
+    if not rel or not rel.startswith("demo/photos/"):
+        raise HTTPException(404, "no photo for this ticket")
+    path = (DEMO_PHOTOS / rel[len("demo/photos/"):]).resolve()
+    if DEMO_PHOTOS not in path.parents or not path.is_file():
+        raise HTTPException(404, "no photo for this ticket")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @app.get("/wards/stats")

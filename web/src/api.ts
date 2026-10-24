@@ -1,5 +1,5 @@
 // The only place that calls fetch. Components import from here.
-import type { Approval, CitySummary, Ticket, TicketWithScore, TraceEvent, WardStat } from "./types";
+import type { Approval, CitySummary, Evidence, Score, Ticket, TicketWithScore, TraceEvent, WardStat } from "./types";
 
 const ENGINE = "/api/engine";
 const AGENT = "/api/agent";
@@ -10,6 +10,13 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
+  engineHealth: () => fetch(`${ENGINE}/health`).then((r) => json<{ ok: boolean; mode: string }>(r)),
+  agentHealth: () => fetch(`${AGENT}/health`).then((r) => json<{ ok: boolean; stubs: boolean }>(r)),
+  /** Demo set photos, served by the Engine (open-licence images, see demo/photos/ATTRIBUTION.md). */
+  demoPhoto: (ticketId: string, which: "before" | "after") => `${ENGINE}/media/demo/${ticketId}/${which}.jpg`,
+  satelliteChip: (ticketId: string, which: "before" | "after") => `${ENGINE}/satellite/chip/${ticketId}/${which}.png`,
+  satelliteCheck: (ticketId: string, cachedOnly = true) =>
+    fetch(`${ENGINE}/satellite/check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticket_id: ticketId, cached_only: cachedOnly }) }).then((r) => json<Evidence>(r)),
   tickets: (city?: string, status?: string, limit = 100, sort: "newest" | "risk" = "newest") => {
     const q = new URLSearchParams({ limit: String(limit), sort });
     if (city) q.set("city", city);
@@ -18,6 +25,7 @@ export const api = {
   },
   cities: () => fetch(`${ENGINE}/cities`).then((r) => json<CitySummary[]>(r)),
   ticket: (id: string) => fetch(`${ENGINE}/tickets/${id}`).then((r) => json<Ticket>(r)),
+  score: (id: string) => fetch(`${ENGINE}/tickets/${id}/score`).then((r) => json<Score>(r)),
   wardStats: (city?: string) =>
     fetch(`${ENGINE}/wards/stats${city ? `?city=${city}` : ""}`).then((r) => json<WardStat[]>(r)),
   startRun: (id: string) =>

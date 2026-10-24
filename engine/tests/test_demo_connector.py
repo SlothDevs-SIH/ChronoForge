@@ -64,3 +64,12 @@ def test_every_photo_in_the_real_manifest_exists_and_the_set_has_every_planted_k
         assert (root / t["closure_photo_url"]).exists() and (root / t["complaint_photo_url"]).exists(), t["ticket_id"]
     modes = {r["gt_failure_mode"] for r in src.truth}
     assert {"reused", "shifted_gps", "stale_time", "still_broken", "none"} <= modes
+
+
+def test_media_route_serves_only_demo_photos():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    assert c.get("/media/demo/no-such-ticket/before.jpg").status_code == 404      # unknown ticket
+    assert c.get("/media/demo/blr-0001/before.jpg").status_code == 404            # a ticket with no complaint photo
+    assert c.get("/media/demo/..%2f..%2fREADME/before.jpg").status_code == 404    # no path traversal through the id
