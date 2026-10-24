@@ -61,10 +61,8 @@ In the `trueclose` project, Settings > Environment Variables (Production):
 |---|---|
 | `VITE_SUPABASE_URL` | your project URL |
 | `VITE_SUPABASE_ANON_KEY` | the anon key |
-| `VITE_ENGINE_URL` | the Engine's Render address |
-| `VITE_AGENT_URL` | the Agent's Render address |
 
-Do not set `VITE_AUTH_DISABLED`. Redeploy after saving.
+Do not set `VITE_ENGINE_URL` or `VITE_AGENT_URL`: `web/vercel.json` proxies `/api/engine/*` and `/api/agent/*` to the Render services, so the browser only talks to the site's own address (no CORS, and one address to rate-limit). If a Render address changes, edit the two destinations in `web/vercel.json`. Do not set `VITE_AUTH_DISABLED`. Redeploy after saving.
 
 ## 5. First sign-in
 

@@ -1,3 +1,7 @@
 {
-  "rewrites": [{ "source": "/((?!assets/|favicon.svg).*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/engine/:path*", "destination": "https://chronoforge-dh39.onrender.com/:path*" },
+    { "source": "/api/agent/:path*", "destination": "https://trueclose-agent.onrender.com/:path*" },
+    { "source": "/((?!assets/|favicon.svg|api/).*)", "destination": "/index.html" }
+  ]
 }
