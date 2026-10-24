@@ -6,6 +6,7 @@ The browser signs in with Supabase and sends `Authorization: Bearer <access toke
 
 AUTH_REQUIRED=0 (the default) keeps the local demo open: every request is a local admin. Production sets AUTH_REQUIRED=1.
 """
+import logging
 import re
 import threading
 from dataclasses import dataclass, field
@@ -19,6 +20,8 @@ from . import audit, config
 from .db import get_conn, lock
 from .http_utils import api_error, note_user, rate_limit
 from .models import now_iso
+
+log = logging.getLogger("trueclose.auth")
 
 Role = Literal["citizen", "officer", "admin"]
 STAFF = ("officer", "admin")
@@ -82,8 +85,11 @@ def decode_token(token: str) -> dict:
             return jwt.decode(token, key, algorithms=[alg], audience=config.SUPABASE_JWT_AUDIENCE, options=opts)
     except jwt.ExpiredSignatureError:
         raise api_error(401, "token_expired", "Your session has expired. Sign in again.", {"WWW-Authenticate": "Bearer"})
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as exc:
+        # The reason goes to the server log only (never the token): it is what tells a wrong SUPABASE_URL from a bad audience.
+        log.warning("token rejected (alg=%s): %s: %s", alg, type(exc).__name__, exc)
         raise api_error(401, "invalid_token", "The sign-in token is not valid.", {"WWW-Authenticate": "Bearer"})
+    log.warning("token rejected: unsupported algorithm %r", alg)
     raise api_error(401, "invalid_token", "The sign-in token is not valid.", {"WWW-Authenticate": "Bearer"})
 
 
