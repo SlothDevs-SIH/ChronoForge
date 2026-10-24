@@ -9,7 +9,7 @@ TrueClose is an agent that sits on top of a municipal complaint system. For ever
 
 ## 1b. Decisions locked (24 Oct)
 
-Multi-city data (Bengaluru, Pune, Mumbai, synthetic); demo photos from a labelled demo set; label strategy D; broad scope; DuckDB + Parquet (Q3 A); scorer = LightGBM + logistic ensemble; satellite from cached GEOAI-04 tiles (live STAC optional); FastAPI; photo check = imagehash + EXIF + CLIP (DINOv2-small stretch); LLM-chosen tools with Gemini (AI Studio) then OpenAI then deterministic fallback; Telegram first then WhatsApp Cloud; keyword-then-LLM replies; React + Vite + TS, MapLibre + deck.gl; demo on a laptop and deployed. Full detail: `PROJECT_OVERVIEW.md`. Open: colour palette, Research/PPT questions (Q17, Q19), Q7 (no option E exists).
+Multi-city data (Bengaluru, Pune, Mumbai, synthetic); demo photos from a labelled demo set; label strategy D; broad scope; DuckDB + Parquet (Q3 A); scorer = LightGBM + logistic ensemble; satellite via live AWS Earth Search STAC with cache fallback (Q6 A); FastAPI (Q7 A); photo check = imagehash + EXIF + CLIP (DINOv2-small stretch); LLM-chosen tools with Gemini (AI Studio) then OpenAI then deterministic fallback; Telegram first then WhatsApp Cloud; keyword-then-LLM replies; React + Vite + TS, MapLibre + deck.gl; demo on a laptop and deployed. Full detail: `PROJECT_OVERVIEW.md`. Open: colour palette, Research/PPT questions (Q17, Q19).
 
 Contract addition: the Engine's list endpoints accept `?city=bengaluru|pune|mumbai|synthetic`, and every Ticket carries `"city"` and `"data_quality": "real | partial | synthetic"`.
 

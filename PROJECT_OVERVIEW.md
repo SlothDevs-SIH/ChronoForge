@@ -61,7 +61,7 @@ Why it is "agentic" and not just a pipeline:
 |---|---|---|
 | **Closure score** (ML) | Reads the ticket's data (repeat complaints nearby, how fast it closed, closing time of day, officer batch closing) and gives a probability that the closure is false, with plain reasons | Learned from a proxy label, not true ground truth |
 | **Photo check** | Examines the closure photo: reused image? taken near the place and time? does it still show the problem? same place as the original complaint photo? | Public data has no closure photos, so the demo uses a labelled demo photo set |
-| **Satellite check** | Compares before/after Sentinel-2 images (10 m per pixel) around the site, against similar nearby places to rule out seasonal change | Cannot see small things like potholes; the agent skips these at zero cost and says so. The demo uses cached images |
+| **Satellite check** | Compares before/after Sentinel-2 images (10 m per pixel) around the site, against similar nearby places to rule out seasonal change | Cannot see small things like potholes; the agent skips these at zero cost and says so. Runs live on AWS Earth Search; a pre-fetched cache is the fallback and is badged `cached` |
 | **Citizen check** | Messages the original complainant "Was it fixed?" and reads the reply in English, Hindi, Marathi or Kannada | No reply is weak evidence, never treated as satisfaction |
 
 ## 6. The ML and AI in plain language
@@ -155,7 +155,7 @@ We claim **no real-world false-closure rate**.
 | Catalyst AI FastAPI data engines (acknowledged prior component) | Soham | Exists from an earlier project |
 | City connectors (Bengaluru, Pune, Mumbai, synthetic) | Soham | Not started |
 | Scorer ensemble | Soham | Not started |
-| Satellite verifier (cached tiles) | Soham | Not started |
+| Satellite verifier (live STAC, cache fallback) | Soham | Not started |
 | Evaluation benchmark | Soham | Not started |
 | Photo verifier | Ayush | Not started |
 | Agent planner and fusion | Ayush | Not started |
@@ -167,14 +167,14 @@ We claim **no real-world false-closure rate**.
 
 1. Every number needs a source in the claims register. Our own numbers must come from a script we ran.
 2. Say "reported" for press figures (Hyderabad ~80%).
-3. Label simulated parts: the municipal endpoint is **simulated**; satellite results in the demo are **cached**; the photo set is **demo data**; benchmark numbers are **synthetic injection**. We have no municipal partnership.
+3. Label simulated parts: the municipal endpoint is **simulated**; any satellite result served from the fallback cache is badged **cached**; the photo set is **demo data**; benchmark numbers are **synthetic injection**. We have no municipal partnership.
 4. **Prior work is acknowledged.** GEOAI-04 and the Catalyst AI engines are earlier projects of ours that we reuse. Slides and README say: "built earlier; the closure-integrity logic, agent, connectors and verification loop are new this weekend." The rules do not allow earlier work to be submitted as new, and judges can see the repo history.
 5. Don't name officials or departments as culprits. Talk about systems and incentives.
 
 ## 14. Decisions locked (24 Oct)
 
-Multi-city data; demo photos from a labelled demo set; label strategy = proxy plus injected failures; broad scope; DuckDB + Parquet; scorer = LightGBM + logistic ensemble; satellite from cached GEOAI-04 tiles (live STAC optional); FastAPI; photo = imagehash + EXIF + CLIP (DINOv2-small if time); LLM-chosen tools with Gemini, then OpenAI, then deterministic fallback; Telegram first then WhatsApp Cloud; keyword-then-LLM reply parsing; React + Vite + TS + MapLibre + deck.gl; demo on a laptop and deployed.
-Open: colour palette; deck tooling and the citizen survey (Vedashree); Q7 had no option E.
+Multi-city data; demo photos from a labelled demo set; label strategy = proxy plus injected failures; broad scope; DuckDB + Parquet; scorer = LightGBM + logistic ensemble; satellite live via AWS Earth Search STAC with cache fallback; FastAPI; photo = imagehash + EXIF + CLIP (DINOv2-small if time); LLM-chosen tools with Gemini, then OpenAI, then deterministic fallback; Telegram first then WhatsApp Cloud; keyword-then-LLM reply parsing; React + Vite + TS + MapLibre + deck.gl; demo on a laptop and deployed.
+Open: colour palette; deck tooling and the citizen survey (Vedashree).
 
 ## 15. Where to read more
 

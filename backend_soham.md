@@ -112,11 +112,11 @@ ticket (lat,lng,created_at,closed_at)
   -> compare to the distribution of change in matched control polygons nearby (same ward, no complaint) -> z-score
   -> emit Evidence: likelihood_ratio from the z-score, abstain when cloud-obscured or ineligible
 ```
-- **DECIDED (Q6): E, GEOAI-04 cached tiles.** The satellite verifier reads from the tile cache produced by the GEOAI-04 engine and by our own pre-fetch script for the demo tickets (`data/cache/satellite/`). Consequence for what we claim: the demo satellite check is a **cached** check; we do not say "live" for it. Optional add-on, only if time remains after Round B: the live STAC path through AWS Earth Search (open, no key) using the same code with the network read turned on. The other sources (Planetary Computer, Copernicus, Earth Engine) are not used. Decide at 19:00 whether to build the live path.
+- **DECIDED (Q6): A, AWS Earth Search STAC (open, no key), live.** The verifier searches Sentinel-2 L2A scenes with `pystac-client` and reads only the small window it needs with `rasterio`. Because a live read can take 10-40 s, we also pre-fetch results for the demo tickets into `data/cache/satellite/` and use the cache as a fallback when the network is slow or down. Every result is badged `live` or `cached`; never call a cached result live. Not used: Planetary Computer, Copernicus, Earth Engine. Sentinel-1 radar stays a stretch goal.
 - Sentinel-1 radar (cloud-proof, good for water and large structures) is a **stretch goal**: use the GEOAI-04 flood-mapping path if time allows.
 - **Control-polygon z-score** is the key piece of rigour: a raw "change detected" is meaningless because everything changes seasonally. We ask whether this site changed more than similar nearby places did.
 - **GEOAI-04 reuse**: the code may be copied into `engine/satellite/geoai04/` and wrapped as `learned_change_score(before_chip, after_chip)`. Keep a short `engine/satellite/geoai04/NOTICE.md` ("derived from our earlier GEOAI-04 project, Fusion hackathon") and list it in the README's prior-work line. The new work, which we claim, is the eligibility logic, the control comparison, the ticket wiring and the likelihood-ratio mapping.
-- **Latency**: a live STAC read can take 10-40 s, which is why the demo path is the cache (see decision above). If the live path is built, it shares this code and only differs in where the pixels come from. Badge each result `cached` or `live`.
+- **Latency**: live and cached paths share the same code and differ only in where the pixels come from. Run the agent's satellite call in the background so the UI shows "checking satellite..." instead of freezing.
 - Output `details`: `{before_scene, after_scene, cloud_pct, chip_before_url, chip_after_url, dNDVI, z_score, eligible, reason}`.
 
 ### Mapping to a likelihood ratio
@@ -140,7 +140,7 @@ Per ward and category: **official resolution rate** (share closed) vs **honest r
 
 ## 7. Stack summary
 
-Decided: Q3 A (DuckDB + Parquet), Q5 ensemble, Q6 E, Q7 FastAPI (Q7 has no option E; assumed A, tell us if you meant something else).
+Decided: Q3 A (DuckDB + Parquet), Q5 ensemble, Q6 A (AWS Earth Search STAC, live with cache fallback), Q7 A (FastAPI).
 
 | Layer | Choice | Not chosen |
 |---|---|---|
@@ -148,7 +148,7 @@ Decided: Q3 A (DuckDB + Parquet), Q5 ensemble, Q6 E, Q7 FastAPI (Q7 has no optio
 | Analytics store | DuckDB + Parquet | SQLite, Postgres+PostGIS |
 | Geo | H3, GeoPandas, Shapely | PostGIS only |
 | ML | LightGBM + logistic regression ensemble, isotonic calibration, scikit-learn, SHAP | CatBoost, XGBoost |
-| Satellite | GEOAI-04 cached tiles, rasterio, ONNX Runtime (GEOAI-04 model); optional pystac-client live path | Earth Engine |
+| Satellite | pystac-client + AWS Earth Search, rasterio, ONNX Runtime (GEOAI-04 model), disk cache fallback | Earth Engine |
 | Jobs | FastAPI BackgroundTasks, results cached to disk | Celery or Redis (overkill) |
 | Packaging | Docker, uv or pip-tools, pytest | |
 
@@ -160,7 +160,7 @@ Decided: Q3 A (DuckDB + Parquet), Q5 ensemble, Q6 E, Q7 FastAPI (Q7 has no optio
 | 11:00-12:30 | `bbmp_csv` connector, H3 indexing, `/tickets`, DuckDB tables | Ishan can list real tickets |
 | 12:30-14:30 | Features and label (Option A), LightGBM v1, `/score` | AUROC printed, even if mediocre |
 | 14:30-16:00 | `/wards/stats`, mock municipal endpoint, **first real number for Round A** (for example, "X% of closed tickets had a repeat within 14 days") | Number given to Vedashree before 15:30 |
-| 16:00-19:00 | Satellite verifier: GEOAI-04 code copied in, indices, control z-score, cache for demo tickets across cities (live STAC path only if time) | `/satellite/check` returns real before/after chips |
+| 16:00-19:00 | Satellite verifier: Earth Search STAC read, indices, control z-score, GEOAI-04 code copied in, cache for demo tickets across cities | `/satellite/check` returns real before/after chips |
 | 19:00-21:00 | Benchmark generator, calibration, SHAP text, baselines, `/eval/results` | Eval page has real data |
 | 21:00-22:00 | Bug bash with Ayush's agent end to end | Round B demo |
 | 22:00-02:00 | LR calibration from benchmark, error analysis, perf, Dockerfile | Deployed |
@@ -171,7 +171,7 @@ Decided: Q3 A (DuckDB + Parquet), Q5 ensemble, Q6 E, Q7 FastAPI (Q7 has no optio
 | Risk | Mitigation |
 |---|---|
 | BBMP file lacks lat/lng or closure timestamps | Fall back to ward-level indexing and timestamp-only features; use whichever columns exist and tell Vedashree immediately so slides match. Backup: another city's open data or the synthetic generator |
-| STAC is slow or down during the demo | Disk cache of demo tickets, plus a visible "cached" badge |
+| STAC is slow or down during the demo | Pre-fetched disk cache as automatic fallback, with a visible "cached" badge |
 | Proxy label is criticised | We say it is a proxy and publish the injected-failure benchmark separately |
 | Satellite shows nothing for most categories | That is expected and by design; headline claim is "right check for the right claim, abstain otherwise" |
 | GEOAI-04 model wrapper breaks | The index-based features (dNDVI, dNDBI) work without it; the learned score is an add-on |
