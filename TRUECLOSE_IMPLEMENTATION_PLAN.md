@@ -72,7 +72,7 @@ New dependencies: none planned. Icons are inline SVG. Motion is CSS only (one or
 
 ## 6. Hero video treatment
 
-Source is never modified. `web/scripts/make_hero_video.py` derives `web/public/assets/hero/hero.mp4` (1.1 MB, no audio) and `hero-poster.jpg`: the two generated cards are replaced with a clean plate (first frame) because the camera is locked off; the baked logo, headline and icon bar are softly frosted with feathered edges. Result checked frame by frame: no garbled text remains. One element, not two: the same video fills the page, softened under a left-side gradient for the headline and crisp on the right. Controls: a visible pause/play button, poster fallback, reduced-motion shows the poster only. The clip is labelled "Concept render, not live data".
+Source is never modified. The first clip supplied was replaced on 24 Oct by `frontend_comp/gemini_generated_video_28ed53ce.mp4`, also AI-generated, whose middle shows UI cards, a slide and a monitor with garbled text. `web/scripts/make_hero_video.py` uses only its clean aerial city shot (8.45 to 10.0 s): two small hex-code tags are covered with a patch cloned from nearby scenery, the generator's sparkle mark is blurred, and the shot plays forward then backward, slowed 2x, for a seamless 6 s loop with no audio (`hero.mp4` about 780 KB, `hero-poster.jpg`). One `<video>` element fills the page, softened under a left-side gradient for the headline; pause/play button, poster fallback, reduced motion shows the poster only. Labelled "Concept render. Not live data."
 
 ## 7. Implementation sequence
 
