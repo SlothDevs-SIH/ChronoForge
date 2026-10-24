@@ -17,10 +17,15 @@ COPY data/models /srv/data/models
 COPY data/processed /srv/data/processed
 COPY demo/photos /srv/demo/photos
 
+# ENGINE_DUCKDB_PATH / ENGINE_MEMORY_LIMIT keep the ticket tables in a scratch file with at most 200 MB in RAM: the Engine then
+# peaks near 320 MB instead of 570 MB, so it fits a 512 MB host. Remove those three to hold everything in memory on a big host.
 # The warehouse is NOT baked in: bootstrap downloads it from WAREHOUSE_URL into WAREHOUSE_DIR (a persistent disk).
 ENV CONTRACT_DIR=/srv/contract \
     WAREHOUSE_DIR=/var/data/warehouse \
     SAT_CACHE_DIR=/var/data/cache/satellite \
+    ENGINE_DUCKDB_PATH=/tmp/engine.duckdb \
+    ENGINE_MEMORY_LIMIT=200MB \
+    ENGINE_THREADS=2 \
     PYTHONUNBUFFERED=1 \
     PORT=8001
 RUN mkdir -p /var/data/warehouse /var/data/cache/satellite && chown -R trueclose /var/data /srv

@@ -8,6 +8,7 @@ WAREHOUSE_DIR    overrides data/warehouse
 """
 import json
 import os
+import re
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -67,6 +68,32 @@ def _inconclusive(ticket_id: str, cost: int, details: dict[str, Any]) -> Evidenc
                     likelihood_ratio=1.0, confidence=0.0, cost=cost, details=details, created_at=_now())
 
 
+_SIZE = re.compile(r"^\d+(\.\d+)?\s?(MB|GB|MiB|GiB)$", re.I)
+
+
+def _connect():
+    """In-memory DuckDB by default. For a small host set ENGINE_DUCKDB_PATH (a scratch file, rebuilt at every start) and
+    ENGINE_MEMORY_LIMIT (for example 200MB): the tables then live in the file and only that much is held in RAM, which is
+    what lets the 800,000-ticket warehouse run in 512 MB. Same data and same queries; only where the tables are kept."""
+    path = os.environ.get("ENGINE_DUCKDB_PATH", "")
+    if path:
+        for suffix in ("", ".wal"):
+            try:
+                os.remove(path + suffix)
+            except FileNotFoundError:
+                pass
+    con = duckdb.connect(path or ":memory:")
+    limit = os.environ.get("ENGINE_MEMORY_LIMIT", "")
+    if limit:
+        if not _SIZE.match(limit):
+            raise ValueError(f"ENGINE_MEMORY_LIMIT must look like 200MB, got {limit!r}")
+        con.execute(f"SET memory_limit='{limit}'")
+    threads = os.environ.get("ENGINE_THREADS", "")
+    if threads.isdigit() and int(threads) > 0:
+        con.execute(f"SET threads={int(threads)}")
+    return con
+
+
 class WarehouseStore:
     """All queries run against the view `v`: tickets with status changes from the simulated municipal system
     applied (table `status_overrides`), so lists, filters and stats always agree."""
@@ -75,7 +102,7 @@ class WarehouseStore:
     def __init__(self, directory: Path = WAREHOUSE_DIR) -> None:
         self._dir = directory
         self._lock = threading.Lock()
-        self._con = duckdb.connect()
+        self._con = _connect()
         self._con.execute("create table status_overrides (ticket_id varchar primary key, status varchar)")
         self._load_overrides()
         self._web: dict[str, dict] = {}
