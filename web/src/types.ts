@@ -69,7 +69,17 @@ export interface TraceEvent {
 }
 
 export interface WardStat {
-  city: City; ward: string; category: string; tickets: number; official_rate: number; honest_rate: number;
+  city: City; ward: string; category: string; tickets: number;
+  closed?: number; reopened?: number; open?: number;
+  official_rate: number;
+  reopen_rate?: number | null;
+  honest_rate: number | null; // null until the scorer exists
+}
+
+export interface CitySummary {
+  city: City; tickets: number; closed: number; reopened: number; open: number;
+  data_quality: "real" | "partial" | "synthetic";
+  location_precision: "exact" | "generated" | "ward_centroid" | "none" | null;
 }
 
 export interface Approval {

@@ -91,6 +91,13 @@ def test_stops_early_when_confident():
     assert sum(1 for e in events if e["type"] == "tool_call" and e["tool"] != "get_score") == 1
 
 
+def test_stubs_never_produce_a_verdict_on_a_neutral_prior():
+    # real tickets before the scorer exists have prior 0.5; the stub photo/citizen checks carry no information
+    out, _ = run(FakeEngine(prior=0.5, sat=False))
+    assert out["verdict"]["state"] == "cannot_tell"
+    assert all(e["details"].get("stub") for e in out["evidence"])
+
+
 # ---- service flow ----
 def test_run_then_approve_calls_municipal_reopen():
     fake = FakeEngine(prior=0.9)

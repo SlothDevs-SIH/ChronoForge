@@ -46,7 +46,8 @@ Goal: real complaint data on my laptop and a list of its columns.
 
 Done when: columns are posted, one real file loads, and the synthetic generator makes 1,000 tickets.
 
-**Phase 2 status:** all four connectors are built and tested (Mumbai, Bengaluru, Pune, Sandbox; 56 engine tests pass) and `python -m app.ingest all` loads about 823,000 tickets in 35 seconds. Still to do: DuckDB store over the Parquet files, and switching the API from fixtures to real tickets. See `data/README.md`.
+**Phase 2 status: done.** All four connectors are built (Mumbai, Bengaluru, Pune, Sandbox), `python -m app.ingest all` loads about 822,800 tickets in 35 seconds, and the API now serves the real tickets from DuckDB over the Parquet files (starts in about 4 seconds; most queries about 0.4 s, a status filter over all of Bengaluru about 2 s). 69 engine tests and 10 agent tests pass. The Agent ran end to end on a real Mumbai ticket. To run it: `cd engine && python -m app.ingest all`, then start the Engine; `/health` shows `mode: warehouse`.
+Honest limits until Phase 3: scores are the neutral baseline 0.5, `honest_rate` is null, and the satellite check is a stub (eligibility is real). Phase 3 is the scorer.
 
 ### Phase 2: Backend part 1, real data in the API (about 11:30 to 13:30)
 Goal: Ishan sees real tickets on his screen instead of fixtures.

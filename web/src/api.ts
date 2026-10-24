@@ -1,5 +1,5 @@
 // The only place that calls fetch. Components import from here.
-import type { Approval, Ticket, TicketWithScore, TraceEvent, WardStat } from "./types";
+import type { Approval, CitySummary, Ticket, TicketWithScore, TraceEvent, WardStat } from "./types";
 
 const ENGINE = "/api/engine";
 const AGENT = "/api/agent";
@@ -10,8 +10,13 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  tickets: (city?: string) =>
-    fetch(`${ENGINE}/tickets${city ? `?city=${city}` : ""}`).then((r) => json<TicketWithScore[]>(r)),
+  tickets: (city?: string, status?: string, limit = 100) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (city) q.set("city", city);
+    if (status) q.set("status", status);
+    return fetch(`${ENGINE}/tickets?${q}`).then((r) => json<TicketWithScore[]>(r));
+  },
+  cities: () => fetch(`${ENGINE}/cities`).then((r) => json<CitySummary[]>(r)),
   ticket: (id: string) => fetch(`${ENGINE}/tickets/${id}`).then((r) => json<Ticket>(r)),
   wardStats: (city?: string) =>
     fetch(`${ENGINE}/wards/stats${city ? `?city=${city}` : ""}`).then((r) => json<WardStat[]>(r)),

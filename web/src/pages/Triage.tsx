@@ -3,13 +3,13 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 
 export default function Triage({ city }: { city: string }) {
-  const { data, error, isLoading } = useQuery({ queryKey: ["tickets", city], queryFn: () => api.tickets(city || undefined) });
+  const { data, error, isLoading } = useQuery({ queryKey: ["tickets", city], queryFn: () => api.tickets(city || undefined, "closed") });
   if (isLoading) return <p>Loading tickets...</p>;
   if (error) return <p>Could not reach the Engine on :8001. Is it running? ({String(error)})</p>;
   return (
     <>
       <h1>Triage queue</h1>
-      <p>Closed tickets ranked by probability of a false closure.</p>
+      <p>Closed tickets, newest first. Scores show 50% (the neutral baseline) until the scorer is built.</p>
       <table>
         <thead>
           <tr><th>Ticket</th><th>City</th><th>Ward</th><th>Category</th><th className="num">P(false closure)</th><th>Top reason</th></tr>

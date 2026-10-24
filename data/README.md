@@ -85,6 +85,13 @@ Code: `engine/app/connectors/synthetic.py`. Run `python -m app.ingest pune` and 
 - **Ground truth is separated by construction.** Tickets never carry `gt_*`. Truth goes to `data/warehouse/truth_pune.parquet` and `truth_synthetic.parquet` (1,199 and 1,175 false closures). Only the benchmark may read those files.
 - Extra columns: `closure_photo_id`, `closure_photo_exif_dist_m`.
 
+### The store and the API (Phase 2, built)
+`engine/app/store.py`: `WarehouseStore` loads the Parquet files into DuckDB (about 4 s for 822,846 tickets). Status changes from the simulated municipal system (reopen) live in a small `status_overrides` table joined into a view, so lists, filters and ward stats always agree. `FixtureStore` (the six contract fixtures) is the fallback when no warehouse exists; `ENGINE_DATA_MODE=fixtures|warehouse|auto` forces a mode.
+- **Scores:** `engine/app/scoring.py` returns the neutral baseline (0.5, `baseline-no-model`) until Phase 3.
+- **Satellite eligibility** (`engine/app/eligibility.py`): only garbage and drain tickets with an `exact` or `generated` location. Everything else is skipped at cost 0, including every Bengaluru ticket.
+- **Real numbers from the API today:** Mumbai 77,338 tickets (60,029 closed, 26 reopened); Bengaluru 733,721 (708,831 closed, 2,699 reopened); Pune 5,904 and Sandbox 5,883 synthetic. Example: Begur ward potholes, 1,426 tickets, 99.7% no longer open, 5 reopened.
+- The recent Mumbai tickets are mostly open (the data is a live snapshot), so use `status=closed` when listing tickets to check.
+
 ### All cities at once
 `cd engine && python -m app.ingest all` writes one Parquet file per city to `data/warehouse/` in about 35 seconds. Columns differ slightly between cities (each has its own extras); load with DuckDB `union_by_name`.
 

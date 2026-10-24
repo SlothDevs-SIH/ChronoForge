@@ -1,9 +1,10 @@
-"""Engine service (port 8001). Serves contract fixtures until real modules replace them.
+"""Engine service (port 8001).
+
+Serves the real tickets from the Parquet warehouse (run `python -m app.ingest all` first). With no warehouse it
+falls back to the contract fixtures. GET /health says which mode is active.
 
 Run: uvicorn app.main:app --port 8001 --reload   (from engine/)
 """
-import uuid
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -12,16 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from .models import Evidence, MuniActionResult, SatelliteCheckRequest, Score, Ticket, TicketWithScore
 from .store import store
 
-app = FastAPI(title="TrueClose Engine", version="0.1.0")
+app = FastAPI(title="TrueClose Engine", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
 def _ticket(ticket_id: str) -> Ticket:
-    t = store.tickets.get(ticket_id)
+    t = store.get_ticket(ticket_id)
     if t is None:
         raise HTTPException(404, f"unknown ticket {ticket_id}")
     return t
@@ -29,7 +26,13 @@ def _ticket(ticket_id: str) -> Ticket:
 
 @app.get("/health")
 def health() -> dict:
-    return {"service": "engine", "ok": True, "mode": "fixtures"}
+    return {"service": "engine", "ok": True, "mode": store.mode}
+
+
+@app.get("/cities")
+def cities() -> list[dict]:
+    """Per-city counts and data-quality badge inputs for the UI's city switcher."""
+    return store.cities()
 
 
 @app.get("/tickets", response_model=list[TicketWithScore])
@@ -39,24 +42,12 @@ def list_tickets(
     category: Optional[str] = None,
     status: Optional[str] = None,
     min_score: float = 0.0,
-    limit: int = Query(100, le=1000),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
 ) -> list[TicketWithScore]:
-    out = []
-    for t in store.tickets.values():
-        s = store.scores[t.ticket_id]
-        if city and t.city != city:
-            continue
-        if ward and t.ward != ward:
-            continue
-        if category and t.category != category:
-            continue
-        if status and t.status != status:
-            continue
-        if s.p_false_closure < min_score:
-            continue
-        out.append(TicketWithScore(ticket=t, score=s))
-    out.sort(key=lambda x: x.score.p_false_closure, reverse=True)
-    return out[:limit]
+    """Newest first. Until the Phase 3 scorer exists every real ticket carries the 0.5 baseline prior."""
+    return store.list_tickets(city=city, ward=ward, category=category, status=status, min_score=min_score,
+                              limit=limit, offset=offset)
 
 
 @app.get("/tickets/{ticket_id}", response_model=Ticket)
@@ -67,24 +58,22 @@ def get_ticket(ticket_id: str) -> Ticket:
 @app.get("/tickets/{ticket_id}/score", response_model=Score)
 def get_score(ticket_id: str) -> Score:
     _ticket(ticket_id)
-    return store.scores[ticket_id]
+    return store.get_score(ticket_id)
 
 
 @app.post("/satellite/check", response_model=Evidence)
 def satellite_check(req: SatelliteCheckRequest) -> Evidence:
-    """STUB. SOHAM: replace with the STAC read + control z-score + GEOAI-04 wrapper.
-    Ineligible categories must return inconclusive with cost 0 (this is a feature, not a failure)."""
+    """Eligibility is real (category and location precision). The change measurement is a STUB until Phase 4:
+    eligible tickets return inconclusive with details.stub=true. Ineligible ones return inconclusive at cost 0."""
     _ticket(req.ticket_id)
-    score = store.scores[req.ticket_id]
-    key = "satellite" if score.satellite_eligible else "satellite_ineligible"
-    ev = dict(store.evidence_templates[key])
-    ev.update(ticket_id=req.ticket_id, evidence_id=str(uuid.uuid4()), created_at=_now())
-    return Evidence(**ev)
+    return store.satellite_evidence(req.ticket_id)
 
 
 @app.get("/wards/stats")
-def ward_stats(city: Optional[str] = None) -> list[dict]:
-    return [w for w in store.ward_stats if not city or w["city"] == city]
+def ward_stats(city: Optional[str] = None, category: Optional[str] = None,
+               limit: int = Query(500, ge=1, le=5000)) -> list[dict]:
+    """official_rate = share of tickets no longer open. honest_rate is null until the scorer exists."""
+    return store.ward_stats(city, category)[:limit]
 
 
 @app.get("/eval/results")
@@ -94,21 +83,29 @@ def eval_results() -> dict:
 
 @app.post("/connectors/{name}/sync")
 def connector_sync(name: str) -> dict:
-    """STUB. SOHAM: ingest bbmp_csv / pune / mumbai / synthetic through ComplaintSource adapters."""
-    return {"connector": name, "synced": 0, "mode": "stub"}
+    """Re-run a connector (mumbai | bengaluru | pune | synthetic) and reload the store. Takes 10 to 30 seconds."""
+    from .ingest import SOURCES, ingest  # imported lazily: pulls in pandas
+
+    if name not in SOURCES:
+        raise HTTPException(404, f"unknown connector {name!r}; choose from {sorted(SOURCES)}")
+    src = SOURCES[name]()
+    df = ingest(src)
+    store.reload()
+    return {"connector": name, "synced": len(df), "report": dict(src.report), "mode": store.mode,
+            "note": "restart the service to switch from fixtures to the warehouse" if store.mode == "fixtures" else None}
 
 
 # ---- Simulated municipal system (clearly labelled simulated in the UI) ----
 @app.get("/muni/tickets", response_model=list[Ticket])
-def muni_tickets() -> list[Ticket]:
-    return list(store.tickets.values())
+def muni_tickets(limit: int = Query(100, ge=1, le=1000)) -> list[Ticket]:
+    return store.muni_tickets(limit)
 
 
 @app.post("/muni/tickets/{ticket_id}/reopen", response_model=MuniActionResult)
 def muni_reopen(ticket_id: str) -> MuniActionResult:
-    t = _ticket(ticket_id)
-    t.status = "reopened"
-    return MuniActionResult(ticket_id=ticket_id, status=t.status, note="simulated municipal system")
+    _ticket(ticket_id)
+    store.set_status(ticket_id, "reopened")
+    return MuniActionResult(ticket_id=ticket_id, status="reopened", note="simulated municipal system")
 
 
 @app.post("/muni/tickets/{ticket_id}/escalate", response_model=MuniActionResult)

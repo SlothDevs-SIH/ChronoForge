@@ -5,10 +5,14 @@ The JSON files in this folder are the data contract between Engine, Agent and th
 ## Endpoints
 
 **Engine, port 8001**
-- `GET /tickets?city=&ward=&category=&status=&min_score=&limit=`: list of `{ticket, score}`
+- `GET /tickets?city=&ward=&category=&status=&min_score=&limit=&offset=`: list of `{ticket, score}`, newest first. Pass `status=closed` to list closed tickets (the ones TrueClose checks)
 - `GET /tickets/{id}`, `GET /tickets/{id}/score`
+- `GET /cities`: per-city counts plus `data_quality` and `location_precision` for the city switcher and its badge
 - `POST /satellite/check` with `{ticket_id}`: returns Evidence
-- `GET /wards/stats?city=`, `GET /eval/results`, `POST /connectors/{name}/sync`
+- `GET /wards/stats?city=&category=&limit=`: per ward and category, `official_rate` (share no longer open), `reopen_rate`, counts, and `honest_rate`
+- `GET /eval/results`, `POST /connectors/{mumbai|bengaluru|pune|synthetic}/sync`, `GET /health` (shows `mode`: `warehouse` or `fixtures`)
+
+Until the Phase 3 scorer exists: every real ticket's score is the neutral baseline (`p_false_closure` 0.5, `model_version` "baseline-no-model", no reasons), `honest_rate` is `null`, and `/satellite/check` returns "inconclusive" with `details.stub=true` for eligible tickets and cost 0 for ineligible ones. The UI should show these honestly, not as results.
 - Simulated municipal system: `GET /muni/tickets`, `POST /muni/tickets/{id}/reopen`, `POST /muni/tickets/{id}/escalate`
 
 **Agent, port 8002**
