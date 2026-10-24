@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "about": "Maps a ticket id to the photo shown on its card. Add one entry per photo and put the file next to this index. Only add a photo for the ticket it actually shows.",
+  "photos": {}
+}

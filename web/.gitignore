@@ -1,2 +1,7 @@
 .vercel
-.env*
+.env.local
+.env.*.local
+node_modules
+dist
+playwright-report
+test-results

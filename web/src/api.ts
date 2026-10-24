@@ -1,62 +1,63 @@
-// The only place that calls fetch. Components import from here.
-import type { Approval, WardDot, AuditEntry, CitySummary, Evidence, Score, Ticket, TicketWithScore, TraceEvent, WardStat } from "./types";
+// The API surface the pages use. All network access goes through lib/http.ts.
+import { AGENT_BASE, ENGINE_BASE, request, streamSse } from "./lib/http";
+import type {
+  AdminUser, Approval, AuditEntry, CitySummary, Evidence, Me, ReplyInfo, Role, Score, Ticket, TicketWithScore,
+  TraceEvent, VerificationRecord, WardDot, WardStat,
+} from "./types";
 
-const ENGINE = "/api/engine";
-const AGENT = "/api/agent";
-
-async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json() as Promise<T>;
-}
+const E = <T,>(path: string, opts?: Parameters<typeof request>[2]) => request<T>(ENGINE_BASE, path, opts);
+const A = <T,>(path: string, opts?: Parameters<typeof request>[2]) => request<T>(AGENT_BASE, path, opts);
 
 export const api = {
-  evalResults: () => fetch(`${ENGINE}/eval/results`).then((r) => json<Record<string, unknown>>(r)),
-  audit: () => fetch(`${AGENT}/audit`).then((r) => json<AuditEntry[]>(r)),
-  auditVerify: () => fetch(`${AGENT}/audit/verify`).then((r) => json<{ ok: boolean; first_broken_idx: number | null; length: number }>(r)),
-  wardMap: (city: string) => fetch(`${ENGINE}/wards/map?city=${encodeURIComponent(city)}`).then((r) => json<WardDot[]>(r)),
-  engineHealth: () => fetch(`${ENGINE}/health`).then((r) => json<{ ok: boolean; mode: string }>(r)),
-  agentHealth: () => fetch(`${AGENT}/health`).then((r) => json<{ ok: boolean; stubs: boolean }>(r)),
-  /** Demo set photos, served by the Engine (open-licence images, see demo/photos/ATTRIBUTION.md). */
-  demoPhoto: (ticketId: string, which: "before" | "after") => `${ENGINE}/media/demo/${ticketId}/${which}.jpg`,
-  satelliteChip: (ticketId: string, which: "before" | "after") => `${ENGINE}/satellite/chip/${ticketId}/${which}.png`,
-  satelliteCheck: (ticketId: string, cachedOnly = true) =>
-    fetch(`${ENGINE}/satellite/check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticket_id: ticketId, cached_only: cachedOnly }) }).then((r) => json<Evidence>(r)),
-  tickets: (city?: string, status?: string, limit = 100, sort: "newest" | "risk" = "newest") => {
-    const q = new URLSearchParams({ limit: String(limit), sort });
+  // ---- Engine
+  engineHealth: () => E<{ ok: boolean; mode: string }>("/health", { auth: false }),
+  agentHealth: () => A<{ ok: boolean; stubs: boolean }>("/health", { auth: false }),
+  cities: () => E<CitySummary[]>("/cities", { auth: false }),
+  evalResults: () => E<Record<string, unknown>>("/eval/results", { auth: false }),
+  tickets: (city?: string, status?: string, limit = 100, sort: "newest" | "risk" = "newest", offset = 0, extra: Record<string, string> = {}) => {
+    const q = new URLSearchParams({ limit: String(limit), sort, offset: String(offset), ...extra });
     if (city) q.set("city", city);
     if (status) q.set("status", status);
-    return fetch(`${ENGINE}/tickets?${q}`).then((r) => json<TicketWithScore[]>(r));
+    return E<TicketWithScore[]>(`/tickets?${q}`);
   },
-  cities: () => fetch(`${ENGINE}/cities`).then((r) => json<CitySummary[]>(r)),
-  ticket: (id: string) => fetch(`${ENGINE}/tickets/${id}`).then((r) => json<Ticket>(r)),
-  score: (id: string) => fetch(`${ENGINE}/tickets/${id}/score`).then((r) => json<Score>(r)),
-  wardStats: (city?: string) =>
-    fetch(`${ENGINE}/wards/stats${city ? `?city=${city}` : ""}`).then((r) => json<WardStat[]>(r)),
-  startRun: (id: string) =>
-    fetch(`${AGENT}/agent/run/${id}`, { method: "POST" }).then((r) => json<{ run_id: string }>(r)),
-  approvals: (status?: string) =>
-    fetch(`${AGENT}/approvals${status ? `?status=${status}` : ""}`).then((r) => json<Approval[]>(r)),
+  ticket: (id: string) => E<Ticket>(`/tickets/${encodeURIComponent(id)}`),
+  score: (id: string) => E<Score>(`/tickets/${encodeURIComponent(id)}/score`),
+  wardStats: (city?: string) => E<WardStat[]>(`/wards/stats${city ? `?city=${encodeURIComponent(city)}` : ""}`),
+  wardMap: (city: string) => E<WardDot[]>(`/wards/map?city=${encodeURIComponent(city)}`),
+  satelliteCheck: (ticketId: string, cachedOnly = true) =>
+    E<Evidence>("/satellite/check", { method: "POST", body: { ticket_id: ticketId, cached_only: cachedOnly } }),
+  /** Demo set photos, served by the Engine (open-licence images, see demo/photos/ATTRIBUTION.md). Public. */
+  demoPhoto: (ticketId: string, which: "before" | "after") => `${ENGINE_BASE}/media/demo/${ticketId}/${which}.jpg`,
+  /** Satellite chips are images, so the browser fetches them as blobs with the token (see useAuthedImage). */
+  satelliteChipPath: (ticketId: string, which: "before" | "after") => `${ENGINE_BASE}/satellite/chip/${encodeURIComponent(ticketId)}/${which}.png`,
+
+  // ---- Agent
+  me: () => A<Me>("/auth/me"),
+  setProfile: (requestedRole: "citizen" | "officer") => A<Me>("/auth/profile", { method: "POST", body: { requested_role: requestedRole } }),
+  myTickets: () => A<{ ticket_id: string }[]>("/me/tickets"),
+  adminUsers: (status?: string) => A<AdminUser[]>(`/admin/users${status ? `?status=${status}` : ""}`),
+  approveUser: (id: string) => A<AdminUser>(`/admin/users/${encodeURIComponent(id)}/approve`, { method: "POST" }),
+  rejectUser: (id: string) => A<AdminUser>(`/admin/users/${encodeURIComponent(id)}/reject`, { method: "POST" }),
+  setUserRole: (id: string, role: Role) => A<AdminUser>(`/admin/users/${encodeURIComponent(id)}/role`, { method: "POST", body: { role } }),
+  linkTicket: (id: string, ticketId: string) => A<AdminUser>(`/admin/users/${encodeURIComponent(id)}/tickets`, { method: "POST", body: { ticket_id: ticketId } }),
+  unlinkTicket: (id: string, ticketId: string) => A<AdminUser>(`/admin/users/${encodeURIComponent(id)}/tickets/${encodeURIComponent(ticketId)}`, { method: "DELETE" }),
+  verification: (ticketId: string) => A<VerificationRecord>(`/verification/${encodeURIComponent(ticketId)}/latest`),
+  startRun: (id: string) => A<{ run_id: string }>(`/agent/run/${encodeURIComponent(id)}`, { method: "POST" }),
+  approvals: (status?: string) => A<Approval[]>(`/approvals${status ? `?status=${status}` : ""}`),
   decide: (id: string, decision: "approve" | "reject", note?: string) =>
-    fetch(`${AGENT}/approvals/${id}/decide`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, note }),
-    }).then((r) => json<Approval>(r)),
-  /** Subscribe to the live agent trace. Returns a close function. */
-  streamRun(runId: string, onEvent: (e: TraceEvent) => void, onEnd: () => void): () => void {
-    const es = new EventSource(`${AGENT}/agent/stream/${runId}`);
-    // The Agent service sends NAMED events ("event: trace"); an unnamed listener would never fire for them.
-    // Listen to both, so either server behaviour works.
-    const handle = (m: MessageEvent) => {
-      try {
-        const e = JSON.parse(m.data);
-        if (e && typeof e.step === "number") onEvent(e as TraceEvent);   // ignore keep-alives and the end marker
-      } catch { /* not JSON: a comment or ping */ }
-    };
-    es.onmessage = handle;
-    es.addEventListener("trace", handle as EventListener);
-    es.addEventListener("end", () => { es.close(); onEnd(); });
-    es.onerror = () => { es.close(); onEnd(); };
-    return () => es.close();
+    A<Approval>(`/approvals/${encodeURIComponent(id)}/decide`, { method: "POST", body: { decision, note } }),
+  audit: () => A<AuditEntry[]>("/audit"),
+  auditVerify: () => A<{ ok: boolean; first_broken_idx: number | null; length: number }>("/audit/verify"),
+  replyLink: (ticketId: string, lang: string) => A<{ token: string; expires_at: string }>("/citizen/reply-links", { method: "POST", body: { ticket_id: ticketId, lang } }),
+  replyInfo: (token: string) => A<ReplyInfo>(`/reply/${encodeURIComponent(token)}`, { auth: false }),
+  reply: (token: string, answer: "yes" | "partly" | "no", lang: string) =>
+    A<{ ok: boolean }>(`/reply/${encodeURIComponent(token)}`, { method: "POST", body: { answer, lang }, auth: false }),
+
+  /** Live agent trace. The Agent sends NAMED events (`trace`, `end`); the stream carries the Authorization header. */
+  streamRun(runId: string, onEvent: (e: TraceEvent) => void, onEnd: (failed: boolean) => void): () => void {
+    return streamSse(AGENT_BASE, `/agent/stream/${encodeURIComponent(runId)}`, (name, data) => {
+      const e = data as TraceEvent;
+      if ((name === "trace" || name === "message") && e && typeof e.step === "number") onEvent(e);
+    }, (err) => onEnd(Boolean(err)));
   },
 };

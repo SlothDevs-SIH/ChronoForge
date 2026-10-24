@@ -1,0 +1,29 @@
+/* Queue filters, pager, find box, who-am-i, admin rows, citizen pages */
+.filters { display: flex; flex-wrap: wrap; gap: 12px 16px; margin-bottom: 16px; }
+.filters label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--pub-muted); }
+.filters select, .find input { min-height: 44px; padding: 0 10px; border: 1.5px solid var(--tc-border); border-radius: 10px; background: #fff; color: var(--tc-charcoal); font: 14px var(--font-body); }
+.find { display: flex; gap: 8px; align-items: center; } .find input { min-width: 200px; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--tc-border); font-size: 14px; color: var(--pub-muted); }
+.whoami { display: flex; align-items: center; gap: 10px; font-size: 13px; } .whoami > span:first-child { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-chip { padding: 3px 10px; border-radius: 999px; background: var(--tc-pale-sage); color: var(--tc-forest); font-size: 12px; font-weight: 700; text-transform: capitalize; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.link-box form { display: flex; gap: 8px; margin-top: 8px; } .link-box input { min-height: 44px; padding: 0 10px; border: 1.5px solid var(--tc-border); border-radius: 10px; font: 14px var(--font-body); width: 160px; }
+.ticket-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ticket-chips li { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--tc-pale-sage); font-size: 13px; }
+.ticket-chips button { min-width: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--tc-forest); font-size: 18px; cursor: pointer; }
+.my-ticket header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; } .my-ticket h2 { margin: 0; }
+.my-ticket dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0 0; } .my-ticket dt { color: var(--pub-muted); font-size: 12px; } .my-ticket dd { margin: 2px 0 0; font-weight: 600; }
+/* Citizen reply page */
+.reply-page { min-height: 100vh; min-height: 100dvh; background: var(--tc-ivory); } .reply-page > header { padding: 20px var(--pub-gutter); }
+.reply-card { width: min(520px, calc(100% - 32px)); margin: 8px auto 48px; padding: 24px; border: 1px solid var(--tc-border); border-radius: 16px; background: #fff; }
+.reply-card h1 { margin: 0 0 12px; font-size: 30px; } .reply-ask { margin: 0 0 18px; font-size: 18px; line-height: 1.5; }
+.reply-actions { display: grid; gap: 10px; } .reply-btn { width: 100%; min-height: 56px; font-size: 17px; }
+.reply-langs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--tc-border); }
+/* Verification record on the ticket page */
+.vr-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.vr-flow { display: flex; align-items: center; gap: 12px; margin: 12px 0; font: 700 22px var(--font-display); } .vr-flow small { display: block; color: var(--pub-muted); font: 500 12px var(--font-body); }
+.vr-note { margin: 12px 0 0; padding: 10px 12px; border-left: 4px solid var(--tc-warning); border-radius: 0 8px 8px 0; background: #fbf3e4; font-size: 13px; line-height: 1.5; }
+.vr-table th, .vr-table td { padding: 8px 6px; border-bottom: 1px solid var(--tc-border); text-align: left; font-size: 13px; vertical-align: top; } .vr-table .num { text-align: right; }
+.timeline { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; } .timeline li { display: flex; gap: 10px; font-size: 13px; } .timeline time { color: var(--pub-muted); min-width: 92px; }
+
+.view-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px 0; }

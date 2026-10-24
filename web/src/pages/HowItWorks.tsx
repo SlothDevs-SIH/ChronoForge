@@ -1,9 +1,9 @@
 import { useId, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import Icon, { type IconName } from "../components/Icon";
-import PublicNav from "../components/PublicNav";
+import Dock, { type DockItem } from "../components/Dock";
+import PublicNav, { PublicFooter } from "../components/PublicNav";
 
 type Kind = "real" | "simulated" | "missing";
 interface Step { id: string; title: string; icon: IconName; summary: string; points: string[]; status: { kind: Kind; text: string }[] }
@@ -23,7 +23,7 @@ const STEPS: Step[] = [
     points: ["Closure photo, cost 1: looks for a reused image, a shifted location and a stale timestamp.", "Citizen reply, cost 2: asked on Telegram. A reply is evidence, not automatic truth.", "Satellite, cost 3: before and after Sentinel-2 imagery, only for problems large enough to see from orbit (558 of 77,338 Mumbai tickets). Cloud makes it abstain.", "Human spot check, cost 10."],
     status: [{ kind: "real", text: "Sentinel-2 imagery" }, { kind: "simulated", text: "Photo checks run on the demo photo set" }, { kind: "missing", text: "WhatsApp channel" }] },
   { id: "evaluation", title: "Evaluation", icon: "scale",
-    summary: "Each piece of evidence multiplies the odds of a false closure by a likelihood ratio. Try it below.",
+    summary: "Each piece of evidence multiplies the odds of a false closure by a likelihood ratio. Use the last item in the dock to try it.",
     points: ["Evidence that points to a fix lowers the odds. Evidence against raises them.", "A check that cannot tell contributes a ratio of 1 and changes nothing."],
     status: [{ kind: "real", text: "Fusion rule is implemented and tested" }] },
   { id: "verdict", title: "Verdict", icon: "check",
@@ -49,7 +49,7 @@ function verdictFor(p: number) {
   return { text: "Cannot tell", tone: "warning" };
 }
 
-function FusionExample() {
+function FusionExample({ onClose }: { onClose: () => void }) {
   const [prior, setPrior] = useState(30);
   const [photo, setPhoto] = useState(0);
   const [citizen, setCitizen] = useState(0);
@@ -64,10 +64,10 @@ function FusionExample() {
   const v = verdictFor(posterior);
 
   return (
-    <section className="panel fusion" aria-labelledby="fusion-title">
+    <section className="panel fusion pop-in" aria-labelledby="fusion-title">
       <div className="panel-head">
         <div><h2 id="fusion-title">Try the evaluation</h2><p>An example you can change. The starting risk is a made-up value, not a real ticket.</p></div>
-        <span className="tag tag-simulated">Example</span>
+        <div className="panel-actions"><span className="tag tag-simulated">Example</span><button type="button" className="icon-btn" onClick={onClose} aria-label="Close the evaluation example"><Icon name="x" size={18} /></button></div>
       </div>
       <div className="fusion-grid">
         <div className="fusion-controls">
@@ -98,11 +98,18 @@ function FusionExample() {
   );
 }
 
+const EVAL_ID = "try-evaluation";
+
 export default function HowItWorks() {
-  const [active, setActive] = useState(0);
-  const step = STEPS[active];
+  const [activeId, setActiveId] = useState(STEPS[0].id);
+  const [evalOpen, setEvalOpen] = useState(false);
+  const step = STEPS.find((s) => s.id === activeId) ?? STEPS[0];
   const cities = useQuery({ queryKey: ["cities"], queryFn: api.cities, retry: false });
   const total = cities.data?.reduce((n, c) => n + c.tickets, 0);
+  const items: DockItem[] = [
+    ...STEPS.map((s, i) => ({ id: s.id, label: s.title, icon: s.icon, hint: `Step ${i + 1}` })),
+    { id: EVAL_ID, label: "Try the evaluation", icon: "scale" as IconName, hint: "Interactive example" },
+  ];
 
   return (
     <div className="pub-page">
@@ -110,45 +117,28 @@ export default function HowItWorks() {
       <main className="pub-main">
         <header className="pub-head">
           <h1>How TrueClose checks a closed complaint</h1>
-          <p>Six steps from "resolved" to a decision a person can defend. Each step says what is real, what is simulated and what is not built yet.</p>
+          <p>Six steps from "resolved" to a decision a person can defend. Pick a step to read it, or open the evaluation to try the arithmetic yourself. Each step says what is real, what is simulated and what is not built yet.</p>
         </header>
 
-        <div className="steps">
-          <div className="step-list" role="tablist" aria-label="Verification steps" aria-orientation="vertical">
-            {STEPS.map((s, i) => (
-              <button key={s.id} type="button" role="tab" id={`tab-${s.id}`} aria-selected={i === active} aria-controls="step-panel" tabIndex={i === active ? 0 : -1}
-                className={`step-tab ${i === active ? "is-active" : ""}`} onClick={() => setActive(i)}
-                onKeyDown={(e) => {
-                  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-                  e.preventDefault();
-                  const n = (i + (e.key === "ArrowDown" ? 1 : STEPS.length - 1)) % STEPS.length;
-                  setActive(n);
-                  document.getElementById(`tab-${STEPS[n].id}`)?.focus();
-                }}>
-                <span className="step-num">{i + 1}</span>
-                <span>{s.title}</span>
-              </button>
-            ))}
+        <div className="how">
+          <Dock label="Verification steps" items={items} selected={activeId} pressed={evalOpen ? [EVAL_ID] : []} dividerBefore={EVAL_ID}
+            onSelect={(id) => (id === EVAL_ID ? setEvalOpen((v) => !v) : setActiveId(id))} />
+          <div className="how-detail">
+            <section id="step-panel" aria-labelledby="step-title" className="panel step-panel" key={step.id}>
+              <div className="step-icon"><Icon name={step.icon} size={26} /></div>
+              <h2 id="step-title">{step.title}</h2>
+              <p className="step-summary">{step.summary}</p>
+              <ul>{step.points.map((p) => <li key={p}>{p}</li>)}</ul>
+              {step.id === "marked" && total != null && <p className="live-fact">The Engine has {total.toLocaleString()} tickets loaded right now across {cities.data?.length} cities.</p>}
+              <div className="status-row" aria-label="What is real in this step">
+                {step.status.map((x) => <span key={x.text} className={`tag tag-${x.kind}`}><b>{KIND_LABEL[x.kind]}</b> {x.text}</span>)}
+              </div>
+            </section>
+            {evalOpen && <FusionExample onClose={() => setEvalOpen(false)} />}
           </div>
-          <div id="step-panel" role="tabpanel" aria-labelledby={`tab-${step.id}`} className="panel step-panel" key={step.id}>
-            <div className="step-icon"><Icon name={step.icon} size={26} /></div>
-            <h2>{step.title}</h2>
-            <p className="step-summary">{step.summary}</p>
-            <ul>{step.points.map((p) => <li key={p}>{p}</li>)}</ul>
-            {step.id === "marked" && total != null && <p className="live-fact">The Engine has {total.toLocaleString()} tickets loaded right now across {cities.data?.length} cities.</p>}
-            <div className="status-row" aria-label="What is real in this step">
-              {step.status.map((s) => <span key={s.text} className={`tag tag-${s.kind}`}><b>{KIND_LABEL[s.kind]}</b> {s.text}</span>)}
-            </div>
-          </div>
-        </div>
-
-        <FusionExample />
-
-        <div className="pub-cta">
-          <p>Want to see it run on real code and real photos?</p>
-          <Link className="btn btn-primary" to="/platform">Explore the platform</Link>
         </div>
       </main>
+      <PublicFooter current="/how-it-works" />
     </div>
   );
 }

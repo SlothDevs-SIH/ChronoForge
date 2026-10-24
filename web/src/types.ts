@@ -105,3 +105,34 @@ export interface AuditEntry {
 }
 
 export interface WardDot { ward: string; lat: number; lng: number; tickets: number; official_rate: number; reopen_rate: number | null }
+
+// ---- Auth, roles and verification records (contract/AUTH_AND_DEPLOY.md) ----
+export type Role = "citizen" | "officer" | "admin";
+export type AccountStatus = "active" | "pending" | "rejected";
+export interface Me {
+  user_id: string; email: string; role: Role; status: AccountStatus;
+  requested_role: string | null; ticket_ids: string[];
+}
+export interface AdminUser {
+  user_id: string; email: string; role: Role; status: AccountStatus; requested_role: string | null;
+  ticket_ids?: string[]; created_at?: string;
+}
+export interface VerificationCheck {
+  check: "photo" | "satellite" | "citizen" | "human";
+  performed: boolean; skipped_reason: string | null;
+  verdict: "supports_fix" | "contradicts_fix" | "inconclusive" | null;
+  likelihood_ratio: number | null; cost: number | null;
+}
+export interface VerificationRecord {
+  run_id: string; ticket_id: string; created_at: string;
+  config_version: string; calibrated: boolean;
+  closure_claimed: string;
+  verification_verdict: "verified_fixed" | "likely_not_fixed" | "cannot_tell" | "not_performed" | "pending";
+  review_state: "none" | "pending" | "approved" | "rejected";
+  prior: number | null; posterior: number | null;
+  checks: VerificationCheck[];
+  provenance: { data_quality: string; score_type: string; city: string };
+  note: string;
+  pending_reason?: string | null;
+}
+export interface ReplyInfo { ticket_id: string; category: string; ward: string; lang: string; status: "open" | "answered" | "expired" }

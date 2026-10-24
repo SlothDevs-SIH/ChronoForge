@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
 
 :root {
   --tc-forest: #163d32;
@@ -8,7 +7,7 @@
   --tc-white: #ffffff;
   --tc-charcoal: #18211d;
   --tc-sage: #a8b8a8;
-  --tc-muted: #68756d;
+  --tc-muted: #56635b;
   --tc-border: #e1e6e2;
   --tc-pale-sage: #eaf0e8;
   --tc-success: #237a4b;

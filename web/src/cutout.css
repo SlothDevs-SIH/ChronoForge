@@ -1,0 +1,50 @@
+/* Cutout card (plain CSS version of the Cult UI Cutout Card). Colours come from the TrueClose tokens. */
+.cutout { --surface: #fff; --pin: var(--tc-forest); position: relative; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--tc-border); border-radius: 24px; background: var(--surface); box-shadow: 0 6px 20px rgba(24,33,29,.06); transition: box-shadow .2s ease, transform .2s ease; }
+.cutout:hover { box-shadow: 0 12px 28px rgba(24,33,29,.12); transform: translateY(-2px); }
+.cutout-media { position: relative; height: 200px; overflow: hidden; background: var(--tc-pale-sage); }
+.cutout-media > img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .5s cubic-bezier(.23,1,.32,1); }
+.cutout:hover .cutout-media > img { transform: scale(1.04); }
+.cutout-overlay { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(24,33,29,0) 55%, rgba(24,33,29,.28)); pointer-events: none; }
+.cutout-empty { display: grid; place-content: center; justify-items: center; gap: 6px; width: 100%; height: 100%; color: var(--tc-evergreen); text-align: center; font-size: 13px; }
+.cutout-empty svg { opacity: .7; } .cutout-empty small { color: var(--pub-muted); font-size: 12px; }
+
+/* Notched label (bottom-left of the photo) */
+.cutout-label { position: absolute; left: 0; bottom: 0; z-index: 2; padding: 10px 18px 10px 16px; border-top-right-radius: 20px; background: var(--surface); color: var(--tc-charcoal); font-size: 13px; font-weight: 700; text-transform: capitalize; }
+.cutout-fillet { position: absolute; display: block; width: 20px; height: 20px; pointer-events: none; }
+.cutout-fillet-up { left: 0; bottom: 100%; background: radial-gradient(circle at 100% 0, transparent 19.5px, var(--surface) 20px); }
+.cutout-fillet-right { left: 100%; bottom: 0; background: radial-gradient(circle at 100% 0, transparent 19.5px, var(--surface) 20px); }
+/* Pin (top-right of the photo) */
+.cutout-pin { position: absolute; top: 0; right: 0; z-index: 2; padding: 8px 14px 8px 16px; border-bottom-left-radius: 16px; background: var(--pin); color: #fff; font-size: 13px; font-weight: 700; }
+.cutout-pin-warning { --pin: #8a4c0f; } .cutout-pin-danger { --pin: #9b2c2c; } .cutout-pin-neutral { --pin: #475569; }
+.cutout-fillet-left { right: 100%; top: 0; background: radial-gradient(circle at 0 100%, transparent 15.5px, var(--pin) 16px); width: 16px; height: 16px; }
+.cutout-fillet-down { right: 0; top: 100%; background: radial-gradient(circle at 0 100%, transparent 15.5px, var(--pin) 16px); width: 16px; height: 16px; }
+
+.cutout-content { display: grid; gap: 8px; padding: 18px 20px 6px; }
+.cutout-content h2, .cutout-content h3 { margin: 0; font: 700 19px/1.25 var(--font-display); letter-spacing: -.02em; text-wrap: balance; }
+.cutout-content p { margin: 0; color: #46524b; font-size: 14px; line-height: 1.5; text-wrap: pretty; }
+.cutout-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cutout-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 6px 20px 0; padding: 12px 0 14px; border-top: 1px solid var(--tc-border); color: var(--pub-muted); font-size: 13px; }
+.cutout-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 0 20px 18px; margin-top: auto; }
+.cutout-actions .btn, .cutout-actions button { transition: transform .15s cubic-bezier(.23,1,.32,1), background .18s ease; } .cutout-actions .btn:active, .cutout-actions button:active { transform: scale(.97); }
+.cutout-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 20px; }
+
+/* Entrance: the text blocks arrive one after another, once, when the card mounts */
+.cutout-step { animation: cutout-in .5s cubic-bezier(.23,1,.32,1) both; animation-delay: calc(var(--i, 0) * 70ms + 80ms); }
+@keyframes cutout-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .cutout, .cutout:hover { transform: none; transition: none; } .cutout-media > img, .cutout:hover .cutout-media > img { transition: none; transform: none; } .cutout-step { animation: none; } }
+
+.cutout-credit { position: absolute; right: 10px; bottom: 8px; z-index: 1; max-width: 55%; color: #fff; font-size: 11px; line-height: 1.3; text-align: right; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.view-toggle { display: inline-flex; padding: 3px; border: 1px solid var(--tc-border); border-radius: 12px; background: #fff; }
+.view-toggle button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--tc-charcoal); font: 600 13px var(--font-body); cursor: pointer; } .view-toggle button[aria-pressed=true] { background: var(--tc-forest); color: #fff; }
+
+/* Complaint card (TrueClose): ticket id first, one real link that covers the whole card */
+.complaint-card .cutout-media { height: 180px; }
+.complaint-card .complaint-id { font-size: 18px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.complaint-card .complaint-meta { color: var(--pub-muted); font-size: 13px; text-transform: capitalize; }
+.complaint-card .complaint-note { font-weight: 600; color: var(--tc-charcoal); }
+.complaint-card .cutout-footer .badge { font-size: 11px; }
+.complaint-card .complaint-link::after { content: ""; position: absolute; inset: 0; z-index: 3; border-radius: 24px; }
+.complaint-card:focus-within { outline: 3px solid var(--tc-evergreen); outline-offset: 2px; }
+.complaint-card .complaint-link:focus-visible { outline: none; }
+.cutout-grid .cutout { height: 100%; }
+.approval-ticket { max-width: 340px; margin: 4px 0 14px; }
