@@ -15,7 +15,7 @@ Not yet verified against real services: Postgres mode, Supabase sign-in and stor
 
 ## 2. Render: Agent
 
-New > Web Service > from the GitHub repo, root directory `agent`, runtime Docker. Environment:
+New > Web Service > from the GitHub repo, branch `feature/auth-and-deploy`, leave Root Directory empty (the repo root is the Docker build context), runtime Docker, Dockerfile Path `agent/Dockerfile`. Environment:
 
 | Variable | Value |
 |---|---|
@@ -38,7 +38,7 @@ Add a persistent disk (for `PHOTO_INDEX`) if you want duplicate-photo memory to 
 
 ## 3. Render: Engine
 
-New > Web Service, root directory `engine`, runtime Docker. Add a persistent disk mounted at `/var/data`. Environment:
+New > Web Service, same repo and branch, Root Directory empty, runtime Docker, Dockerfile Path `engine/Dockerfile`. Add a persistent disk mounted at `/var/data`. Environment:
 
 | Variable | Value |
 |---|---|
