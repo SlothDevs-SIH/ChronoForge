@@ -124,14 +124,14 @@ export interface VerificationCheck {
   likelihood_ratio: number | null; cost: number | null;
 }
 export interface VerificationRecord {
-  run_id: string; ticket_id: string; created_at: string;
+  run_id: string | null; ticket_id: string; created_at?: string; status?: string;
   config_version: string; calibrated: boolean;
   closure_claimed: string;
   verification_verdict: "verified_fixed" | "likely_not_fixed" | "cannot_tell" | "not_performed" | "pending";
   review_state: "none" | "pending" | "approved" | "rejected";
   prior: number | null; posterior: number | null;
   checks: VerificationCheck[];
-  provenance: { data_quality: string; score_type: string; city: string };
+  provenance: { data_quality?: string; score_type?: string; city?: string };
   note: string;
   pending_reason?: string | null;
 }

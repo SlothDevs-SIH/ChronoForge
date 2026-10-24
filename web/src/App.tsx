@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, Route, Routes, useSearchParams } from "react-router-dom";
+import { Link, NavLink, Outlet, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import Landing from "./pages/Landing";
 import HowItWorks from "./pages/HowItWorks";
 import Platform from "./pages/Platform";
@@ -11,6 +11,7 @@ import MyTickets, { MyTicket } from "./pages/MyTickets";
 import Admin from "./pages/Admin";
 import Reply from "./pages/Reply";
 import ConnectionBadge from "./components/ConnectionBadge";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { Brand } from "./components/PublicNav";
 import { useAuth } from "./auth/AuthProvider";
 import { Forbidden, RequireAuth } from "./auth/guards";
@@ -21,6 +22,7 @@ const CITIES = ["bengaluru", "pune", "mumbai", "synthetic", "demo"];
 function AppShell() {
   const [params, setParams] = useSearchParams();
   const { me, email, signOut, status } = useAuth();
+  const location = useLocation();
   const city = params.get("city") ?? "";
   const link = ({ isActive }: { isActive: boolean }) => (isActive ? "active" : "");
   const staff = me?.role === "officer" || me?.role === "admin";
@@ -57,7 +59,7 @@ function AppShell() {
           )}
         </div>
       </header>
-      <main className="app-page"><Outlet /></main>
+      <main className="app-page"><ErrorBoundary resetKey={location.pathname}><Outlet /></ErrorBoundary></main>
     </div>
   );
 }

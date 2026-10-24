@@ -52,10 +52,14 @@ function VerificationPanel({ ticket }: { ticket: Ticket }) {
   }
   if (q.error) return <section className="app-card"><div className="app-card-header"><h2>Verification</h2></div><div className="app-card-body"><ErrorState error={q.error} onRetry={() => void q.refetch()} title="We couldn't load the verification record" /></div></section>;
   const r = q.data;
+  // The Agent answers 200 with a pending record (no run id, no timestamps) when nothing has been run for this ticket.
+  if (!r.run_id) {
+    return <section className="app-card"><div className="app-card-header"><h2>Verification</h2></div><div className="app-card-body"><p className="muted">{r.pending_reason ?? "No verification has been run for this ticket yet."} Run the agent from the panel on the right.</p></div></section>;
+  }
   const v = VERDICT_TEXT[r.verification_verdict] ?? VERDICT_TEXT.pending;
   return (
     <section className="app-card" aria-labelledby="vr-title">
-      <div className="app-card-header"><h2 id="vr-title">Verification</h2><span className={`badge ${r.provenance.data_quality === "synthetic" ? "synthetic" : "real"}`}>{r.provenance.data_quality} data</span></div>
+      <div className="app-card-header"><h2 id="vr-title">Verification</h2><span className={`badge ${r.provenance?.data_quality === "synthetic" ? "synthetic" : "real"}`}>{r.provenance?.data_quality ?? ticket.data_quality} data</span></div>
       <div className="app-card-body">
         <div className="vr-head">
           <span className="tag tag-missing"><b>City says</b> {r.closure_claimed}</span>
@@ -69,7 +73,7 @@ function VerificationPanel({ ticket }: { ticket: Ticket }) {
         <table className="vr-table">
           <caption className="sr-only">Checks the agent considered</caption>
           <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col" className="num">Odds multiplier</th></tr></thead>
-          <tbody>{r.checks.map((c) => (
+          <tbody>{(r.checks ?? []).map((c) => (
             <tr key={c.check}>
               <th scope="row">{CHECK_NAME[c.check] ?? c.check}</th>
               <td>{c.performed ? (c.verdict ? CHECK_RESULT[c.verdict] : "Performed") : `Skipped: ${c.skipped_reason ?? "not needed"}`}</td>
@@ -80,7 +84,7 @@ function VerificationPanel({ ticket }: { ticket: Ticket }) {
         <ol className="timeline">
           <li><time>{ticket.created_at.slice(0, 10)}</time><span>Complaint filed</span></li>
           {ticket.closed_at && <li><time>{ticket.closed_at.slice(0, 10)}</time><span>Marked closed by the city</span></li>}
-          <li><time>{r.created_at.slice(0, 10)}</time><span>Verification run</span></li>
+          {r.created_at && <li><time>{r.created_at.slice(0, 10)}</time><span>Verification run</span></li>}
         </ol>
       </div>
     </section>
