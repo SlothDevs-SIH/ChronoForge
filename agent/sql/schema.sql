@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS citizen_requests (
   chat_id TEXT NOT NULL,         -- needed to send; only chat_hash is ever logged or shown to an LLM
   chat_hash TEXT NOT NULL,
   lang TEXT NOT NULL DEFAULT 'en',
+  channel TEXT NOT NULL DEFAULT 'telegram',   -- telegram | whatsapp
   status TEXT NOT NULL,          -- registered | asked | answered | opted_out
   created_at TEXT NOT NULL,
   asked_at TEXT,

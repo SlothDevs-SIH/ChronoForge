@@ -2,13 +2,14 @@
 import asyncio
 import json
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
 from pydantic import BaseModel
 
-from . import agent, approvals, audit, config, llm, llm_planner, telegram, tools
+from . import agent, approvals, audit, config, llm, llm_planner, telegram, tools, whatsapp
 from .db import get_conn
 from .models import DecideRequest, PhotoRequest
 from .photo import PhotoIndex, verify_photo
@@ -34,12 +35,13 @@ def evidence_photo(req: PhotoRequest):
 class ContactRequest(BaseModel):
     chat_id: str
     lang: str = "en"
+    channel: str = "telegram"
 
 
 @app.post("/citizen/{ticket_id}/contact")
 def register_contact(ticket_id: str, req: ContactRequest):
     """Demo only: link a ticket to one of our own registered Telegram chats."""
-    telegram.register_contact(ticket_id, req.chat_id, req.lang)
+    telegram.register_contact(ticket_id, req.chat_id, req.lang, req.channel)
     return {"ticket_id": ticket_id, "chat_hash": telegram.chat_hash(req.chat_id)}
 
 
@@ -56,6 +58,28 @@ def telegram_webhook(update: dict, x_telegram_bot_api_secret_token: str | None =
     run_id = agent.start_run(ev.ticket_id)   # re-run so the new evidence is fused into a fresh verdict
     agent.run_in_background(run_id)
     return {"ok": True, "evidence_id": ev.evidence_id, "run_id": run_id}
+
+
+@app.get("/channels/whatsapp/webhook")
+def whatsapp_verify(hub_mode: str | None = Query(default=None, alias="hub.mode"),
+                    hub_token: str | None = Query(default=None, alias="hub.verify_token"),
+                    hub_challenge: str | None = Query(default=None, alias="hub.challenge")):
+    if hub_mode == "subscribe" and config.WHATSAPP_VERIFY_TOKEN and hub_token == config.WHATSAPP_VERIFY_TOKEN:
+        return PlainTextResponse(hub_challenge or "")
+    raise HTTPException(403, "verification failed")
+
+
+@app.post("/channels/whatsapp/webhook")
+def whatsapp_webhook(payload: dict):
+    fallback = llm_planner.classify_reply if llm.available_providers() else None
+    run_ids = []
+    for m in whatsapp.parse_payload(payload):
+        ev = telegram.handle_reply("whatsapp", m["wa_id"], m["text"], m["has_photo"], fallback)
+        if ev is not None:
+            run_id = agent.start_run(ev.ticket_id)
+            agent.run_in_background(run_id)
+            run_ids.append(run_id)
+    return {"ok": True, "run_ids": run_ids}
 
 
 @app.post("/agent/run/{ticket_id}")

@@ -24,11 +24,12 @@ def send_message(chat_id: str | int, text: str) -> None:
     r.raise_for_status()
 
 
-def register_contact(ticket_id: str, chat_id: str | int, lang: str = "en") -> None:
+def register_contact(ticket_id: str, chat_id: str | int, lang: str = "en", channel: str = "telegram") -> None:
     with lock():
         get_conn().execute(
-            "INSERT OR REPLACE INTO citizen_requests (ticket_id, chat_id, chat_hash, lang, status, created_at) "
-            "VALUES (?,?,?,?, 'registered', ?)", (ticket_id, str(chat_id), chat_hash(chat_id), lang, now_iso()))
+            "INSERT OR REPLACE INTO citizen_requests (ticket_id, chat_id, chat_hash, lang, channel, status, created_at) "
+            "VALUES (?,?,?,?,?, 'registered', ?)",
+            (ticket_id, str(chat_id), chat_hash(chat_id), lang, channel, now_iso()))
         get_conn().commit()
 
 
@@ -47,7 +48,10 @@ def send_request(ticket_id: str, category: str, area: str, date: str,
     row = get_request(ticket_id)
     if row is None or row["status"] == "opted_out":
         return False
-    (sender or send_message)(row["chat_id"], citizen.build_prompt(row["lang"], category, area, date))
+    if sender is None:
+        from . import whatsapp
+        sender = whatsapp.send_text if row["channel"] == "whatsapp" else send_message
+    sender(row["chat_id"], citizen.build_prompt(row["lang"], category, area, date))
     with lock():
         get_conn().execute("UPDATE citizen_requests SET status='asked', asked_at=? WHERE ticket_id=?",
                            (now_iso(), ticket_id))
@@ -62,11 +66,16 @@ def handle_update(update: dict, fallback: Callable[[str], str | None] | None = N
     chat_id = (msg.get("chat") or {}).get("id")
     if chat_id is None:
         return None
-    text = msg.get("text") or msg.get("caption") or ""
-    has_photo = bool(msg.get("photo"))
+    return handle_reply("telegram", chat_id, msg.get("text") or msg.get("caption") or "",
+                        bool(msg.get("photo")), fallback)
+
+
+def handle_reply(channel: str, chat_id: str | int, text: str, has_photo: bool = False,
+                 fallback: Callable[[str], str | None] | None = None) -> Evidence | None:
+    """Channel-independent: match a reply to the open request for this contact and turn it into Evidence."""
     row = get_conn().execute(
-        "SELECT * FROM citizen_requests WHERE chat_id=? AND status='asked' ORDER BY asked_at DESC LIMIT 1",
-        (str(chat_id),)).fetchone()
+        "SELECT * FROM citizen_requests WHERE chat_id=? AND channel=? AND status='asked' "
+        "ORDER BY asked_at DESC LIMIT 1", (str(chat_id), channel)).fetchone()
     if row is None:
         return None
     ticket_id = row["ticket_id"]

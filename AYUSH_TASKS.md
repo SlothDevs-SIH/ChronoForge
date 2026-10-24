@@ -23,7 +23,7 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [x] Audit chain (hash-linked) and `/audit/verify`
 - [x] Photo verifier: add CLIP ViT-B/32 (scene presence, before/after) (code + tests done; real model run still to try)
 - [ ] Call Soham's real Engine score
-- [ ] Demo photo set in `data/photos/` with planted failures
+- [x] Demo photo set with planted failures (synthetic placeholders via `experiments/make_demo_photos.py`; swap in real photos)
 - [ ] **Milestone:** agent runs on a real scored ticket
 
 ## Phase 3: Citizen channel
@@ -34,23 +34,23 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [ ] **Milestone:** one ticket uses 3 tools
 
 ## Phase 4: Closed loop
-- [ ] Approve triggers Engine `reopen` / `escalate` (mock municipal endpoint)
-- [ ] Outcome check loop (demo mode: 30 s re-run, predicted vs observed)
-- [ ] Audit `/audit/verify` passes after a full run
+- [x] Approve triggers Engine `reopen` / `escalate` (code + tests; live check needs Soham's Engine)
+- [x] Outcome check loop (demo mode: 30 s re-run, predicted vs observed)
+- [x] Audit `/audit/verify` passes after a full run
 - [ ] **Milestone:** closed loop works
 
 ## Phase 5: LLM planner and WhatsApp, Round B
 - [x] `llm.py` provider chain: Gemini, OpenAI, deterministic fallback
 - [x] LLM-chosen tool calls with schema validation, one retry, then fallback
 - [x] Guardrail tests (ineligible tool, budget, `propose_action` only path, hashed IDs)
-- [ ] Fallback tested with network off
-- [ ] WhatsApp Cloud round trip (only after Telegram passes)
+- [x] Fallback tested with network off (simulated in tests)
+- [ ] WhatsApp Cloud round trip (code + tests done; needs Meta credentials)
 - [ ] **Milestone:** full demo
 
 ## Phase 6: Calibration and polish
 - [ ] Calibrate likelihood ratios on `data/benchmark_v1.parquet`
-- [ ] Cost-vs-accuracy experiment (agent vs run-everything)
-- [ ] Dockerfile / docker-compose, deploy
+- [ ] Cost-vs-accuracy experiment (harness done on stub data; needs real benchmark numbers)
+- [ ] Dockerfile / docker-compose (written, not built: no Docker here); deploy still to do
 - [ ] (stretch) DINOv2-small second embedding
 - [ ] (stretch) Skeptic call on final verdict
 - [ ] (stretch) Whisper voice notes via hosted API

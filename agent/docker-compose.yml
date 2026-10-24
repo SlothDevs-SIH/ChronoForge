@@ -1,0 +1,12 @@
+# Agent service only. Soham's Engine runs from his own compose file; point ENGINE_URL at it.
+services:
+  agent:
+    build: .
+    ports: ["8002:8002"]
+    env_file: .env          # keys live here, never in git
+    environment:
+      ENGINE_URL: ${ENGINE_URL:-http://host.docker.internal:8001}
+    volumes:
+      - agent-data:/data
+volumes:
+  agent-data:
