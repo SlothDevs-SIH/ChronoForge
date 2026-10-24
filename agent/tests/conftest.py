@@ -14,6 +14,9 @@ def fresh_db():
     config.STEP_DELAY = 0
     config.OUTCOME_CHECK_DELAY = 0
     config.USE_STUBS = True
+    # a developer's real .env must never make a test message a real chat or call a real LLM
+    config.TELEGRAM_BOT_TOKEN = config.WHATSAPP_TOKEN = config.WHATSAPP_PHONE_NUMBER_ID = ""
+    config.GEMINI_API_KEY = config.OPENAI_API_KEY = ""
     config.ENGINE_URL = "http://127.0.0.1:9"   # nothing listens here: engine calls fail fast
     yield
     db.reset()

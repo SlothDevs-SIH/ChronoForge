@@ -106,3 +106,40 @@ def test_every_language_has_every_message(lang):
     for kind in ("yes", "no", "partly", "photo", "unclear", "stop", "idle", "help"):
         assert citizen.ack_text(lang, kind).strip()
     assert len(citizen.button_labels(lang)) == 3 and "\n\n" in citizen.build_prompt(lang, "x", "y", "z")
+
+
+def test_a_fix_is_never_confirmed_without_the_photo_check():
+    """Regression: one citizen 'Yes' pushed the posterior under 0.25 and cleared a ticket with a bad photo."""
+    from app import agent, tools
+    from app.models import Evidence, Score
+    calls = []
+
+    def photo(tid, url=None):
+        calls.append("photo")
+        return Evidence(ticket_id=tid, check="photo", verdict="contradicts_fix", likelihood_ratio=8.0,
+                        confidence=0.9, cost=1, details={"flags": ["duplicate"]})
+    tools_get = tools.get_score
+    tools.get_score = lambda tid: (Score(ticket_id=tid, p_false_closure=0.5, eligible_checks=["photo", "citizen"],
+                                         satellite_eligible=False), "test")
+    original = (tools.check_photo, tools.ask_citizen)
+    tools.check_photo = photo
+    tools.ask_citizen = lambda tid: Evidence(ticket_id=tid, check="citizen", verdict="supports_fix",
+                                             likelihood_ratio=0.1, confidence=0.9, cost=2)
+    try:
+        run_id = agent.start_run("T-gate")
+        v = agent.execute(run_id, planner=lambda s: ("ask_citizen", "ask first"), delay=0)
+    finally:
+        tools.get_score, (tools.check_photo, tools.ask_citizen) = tools_get, original
+    assert calls == ["photo"]                                   # the gate forced the photo check
+    assert v.state != "verified_fixed"                          # and the bad photo stopped a false confirmation
+    assert any("never confirmed" in e.summary for e in agent.RUNS[run_id].events)
+
+
+def test_gate_is_skipped_when_the_photo_is_unaffordable_or_already_used():
+    from app import agent, planner
+    s = planner.PlanState(budget_left=0, satellite_eligible=False)
+    assert not agent._photo_gate_open(0.1, s)
+    s = planner.PlanState(budget_left=9, satellite_eligible=False, used={"check_photo"})
+    assert not agent._photo_gate_open(0.1, s)
+    assert agent._photo_gate_open(0.1, planner.PlanState(budget_left=9, satellite_eligible=False))
+    assert not agent._photo_gate_open(0.5, planner.PlanState(budget_left=9, satellite_eligible=False))
