@@ -1,0 +1,3 @@
+DEMO SET, 12 tickets, real tools; an illustration, not a result
+adaptive agent : {'tickets': 12, 'accuracy_when_decided': 1.0, 'abstain_rate': 0.5, 'avg_cost': 1.0}
+run everything : {'tickets': 12, 'accuracy_when_decided': 1.0, 'abstain_rate': 0.5, 'avg_cost': 1.0}

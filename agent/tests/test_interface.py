@@ -63,7 +63,7 @@ def test_approval_carries_full_verdict_snapshot_and_audit_verifies():
 
 
 def test_contract_endpoint_aliases_exist():
-    paths = {r.path for r in app.routes}
+    paths = {getattr(r, "path", None) for r in app.routes}   # included routers are wrapped objects without a path
     for p in ("/agent/run/{ticket_id}", "/agent/stream/{run_id}", "/agent/runs/{run_id}", "/evidence/photo",
               "/citizen/send", "/telegram/webhook", "/whatsapp/webhook", "/approvals",
               "/approvals/{approval_id}/decide", "/audit", "/audit/verify"):

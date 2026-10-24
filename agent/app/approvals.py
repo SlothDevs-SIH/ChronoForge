@@ -43,7 +43,8 @@ def _row(r) -> dict:
             "action": r["action"], "verdict_snapshot": json.loads(r["verdict_snapshot"]),
             "status": r["status"], "note": r["note"],
             "engine_result": json.loads(r["engine_result"]) if r["engine_result"] else None,
-            "created_at": r["created_at"], "decided_at": r["decided_at"]}
+            "created_at": r["created_at"], "decided_at": r["decided_at"],
+            "actor": r["actor"], "actor_email": r["actor_email"]}
 
 
 def get(approval_id: str) -> dict | None:
@@ -60,14 +61,17 @@ def list_approvals(status: str | None = "pending") -> list[dict]:
 
 def _call_engine(action: str, ticket_id: str) -> dict:
     try:
-        r = httpx.post(f"{config.ENGINE_URL}/muni/tickets/{ticket_id}/{action}", timeout=5)
+        headers = {"X-Service-Token": config.ENGINE_SERVICE_TOKEN} if config.ENGINE_SERVICE_TOKEN else {}
+        r = httpx.post(f"{config.ENGINE_URL}/muni/tickets/{ticket_id}/{action}", timeout=5, headers=headers)
         r.raise_for_status()
         return {"ok": True, "response": r.json()}
     except Exception as exc:
         return {"ok": False, "error": f"engine call failed: {exc}"}
 
 
-def decide(approval_id: str, decision: str, note: str = "") -> dict:
+def decide(approval_id: str, decision: str, note: str = "", actor: dict | None = None) -> dict:
+    """actor = {"user_id", "email"} of the person deciding; recorded on the row and in the audit chain."""
+    actor = actor or {}
     a = get(approval_id)
     if a is None:
         raise KeyError(approval_id)
@@ -78,11 +82,14 @@ def decide(approval_id: str, decision: str, note: str = "") -> dict:
         engine_result = _call_engine(a["action"], a["ticket_id"])
     status = "approved" if decision == "approve" else "rejected"
     with lock():
-        get_conn().execute("UPDATE approvals SET status=?, note=?, engine_result=?, decided_at=? WHERE approval_id=?",
-                           (status, note, json.dumps(engine_result) if engine_result else None, now_iso(), approval_id))
+        get_conn().execute("UPDATE approvals SET status=?, note=?, engine_result=?, decided_at=?, actor=?, actor_email=? "
+                           "WHERE approval_id=?",
+                           (status, note, json.dumps(engine_result) if engine_result else None, now_iso(),
+                            actor.get("user_id"), actor.get("email"), approval_id))
         get_conn().commit()
     audit.append("approval_decided", {"approval_id": approval_id, "ticket_id": a["ticket_id"],
-                                      "decision": decision, "note": note})
+                                      "decision": decision, "note": note,
+                                      "actor": actor.get("user_id"), "actor_email": actor.get("email")})
     if decision == "approve":
         _record_prediction(a)
         if engine_result and not engine_result.get("ok"):

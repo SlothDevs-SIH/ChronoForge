@@ -32,6 +32,7 @@ class Score(BaseModel):
     reasons: list[dict[str, Any]] = Field(default_factory=list)
     eligible_checks: list[str] = Field(default_factory=list)
     satellite_eligible: bool = False
+    score_type: str | None = None          # baseline | risk_rank_prior | rule_flags | calibrated_probability (from the Engine)
 
 
 class Verdict(BaseModel):

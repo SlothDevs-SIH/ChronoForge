@@ -1,0 +1,12 @@
+DEMO-000  clean        fail=False -> likely_not_fixed  post=0.75 cost=1
+DEMO-001  clean        fail=False -> likely_not_fixed  post=0.75 cost=1
+DEMO-002  clean        fail=False -> likely_not_fixed  post=0.83 cost=1
+DEMO-003  reused       fail=True  -> likely_not_fixed  post=0.99 cost=1
+DEMO-004  reused       fail=True  -> likely_not_fixed  post=0.99 cost=1
+DEMO-005  shifted_gps  fail=True  -> likely_not_fixed  post=0.92 cost=1
+DEMO-006  shifted_gps  fail=True  -> likely_not_fixed  post=0.80 cost=1
+DEMO-007  stale_time   fail=True  -> likely_not_fixed  post=0.90 cost=1
+DEMO-008  stale_time   fail=True  -> likely_not_fixed  post=0.75 cost=1
+DEMO-009  still_broken fail=True  -> likely_not_fixed  post=0.83 cost=1
+DEMO-010  still_broken fail=True  -> likely_not_fixed  post=0.83 cost=1
+DEMO-g00  clean        fail=False -> likely_not_fixed  post=0.75 cost=1

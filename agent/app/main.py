@@ -5,30 +5,59 @@ import threading
 import time
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
 from pydantic import BaseModel
 
-from . import agent, approvals, audit, config, llm, llm_planner, telegram, tools, whatsapp
+from . import agent, approvals, audit, auth, config, db, llm, llm_planner, reply, telegram, tools, uploads, verification, whatsapp
+from .auth import Principal, authorize_ticket, principal, require_staff, staff_human, staff_or_admin_token, valid_ticket_id
 from .db import get_conn, lock
+from .http_utils import RequestContextMiddleware, api_error, register_error_handlers, setup_logging
 from .models import DecideRequest, PhotoRequest
 from .photo import PhotoIndex, check_ref_allowed, verify_photo
 
-def require_admin(x_admin_token: str | None = Header(default=None)):
-    """Optional shared secret (AGENT_ADMIN_TOKEN). Unset = open, which is only acceptable on a laptop demo."""
-    if config.ADMIN_TOKEN and x_admin_token != config.ADMIN_TOKEN:
-        raise HTTPException(403, "admin token required")
+# Endpoints that message people or read local files: an approved officer or admin, or the shared admin token (scripts).
+require_admin = staff_or_admin_token
+
+app = FastAPI(title="TrueClose Agent service", version="0.3.0")
+# CORS: an explicit allowlist in production (CORS_ORIGINS); "*" only for local runs. Bearer tokens, no cookies.
+app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS or ["*"], allow_credentials=False,
+                   allow_methods=["*"], allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID", "X-Admin-Token"],
+                   expose_headers=["X-Request-ID"])
+app.add_middleware(RequestContextMiddleware)   # outermost: every response, including errors, carries X-Request-ID
+register_error_handlers(app)
+app.include_router(auth.router)
+app.include_router(verification.router)
+app.include_router(reply.router)
+app.include_router(uploads.router)
 
 
-app = FastAPI(title="TrueClose Agent service")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+@app.on_event("startup")
+def _logging():
+    setup_logging()
 
 
 @app.get("/health")
 def health():
     return {"ok": True, "service": "agent", "stubs": config.USE_STUBS}
+
+
+@app.get("/ready")
+def ready():
+    """Ready to serve: the database answers and, when sign-in is required, it is configured."""
+    problems = []
+    try:
+        backend = db.ping()
+    except Exception as exc:
+        backend = None
+        problems.append(f"database unreachable ({type(exc).__name__})")
+    if config.AUTH_REQUIRED and not (config.SUPABASE_JWT_SECRET or config.SUPABASE_URL):
+        problems.append("AUTH_REQUIRED is on but neither SUPABASE_JWT_SECRET nor SUPABASE_URL is set")
+    if problems:
+        return JSONResponse({"ok": False, "service": "agent", "problems": problems}, status_code=503)
+    return {"ok": True, "service": "agent", "database": backend, "auth_required": config.AUTH_REQUIRED}
 
 
 @app.post("/evidence/photo", dependencies=[Depends(require_admin)])
@@ -171,15 +200,33 @@ def whatsapp_webhook(payload: dict):
     return {"ok": True, "run_ids": run_ids}
 
 
+def _ticket_of_run(run_id: str) -> str:
+    run = agent.RUNS.get(run_id)
+    if run is not None:
+        return run.ticket_id
+    row = get_conn().execute("SELECT ticket_id FROM runs WHERE run_id=?", (run_id,)).fetchone()
+    if row is None:
+        raise api_error(404, "not_found", "unknown run")
+    return row["ticket_id"]
+
+
+def _authorize_run(p: Principal, run_id: str) -> None:
+    """Runs belong to staff; anonymous visitors may follow DEMO-* runs only when PUBLIC_DEMO_RUNS=1."""
+    authorize_ticket(p, _ticket_of_run(run_id), public_demo=True, citizen_ok=False)
+
+
 @app.post("/agent/run/{ticket_id}")
-def run_ticket(ticket_id: str):
+def run_ticket(ticket_id: str, p: Principal = Depends(principal)):
+    valid_ticket_id(ticket_id)
+    authorize_ticket(p, ticket_id, public_demo=True, citizen_ok=False)
     run_id = agent.start_run(ticket_id)
     agent.run_in_background(run_id)
     return {"run_id": run_id}
 
 
 @app.get("/agent/stream/{run_id}")
-async def stream(run_id: str):
+async def stream(run_id: str, p: Principal = Depends(principal)):
+    _authorize_run(p, run_id)
     run = agent.RUNS.get(run_id)
     if run is None:
         row = get_conn().execute("SELECT status, trace FROM runs WHERE run_id=?", (run_id,)).fetchone()
@@ -207,7 +254,8 @@ async def stream(run_id: str):
 
 
 @app.get("/agent/runs/{run_id}")
-def get_run(run_id: str):
+def get_run(run_id: str, p: Principal = Depends(principal)):
+    _authorize_run(p, run_id)
     run = agent.RUNS.get(run_id)
     if run is not None:
         return {"run_id": run_id, "ticket_id": run.ticket_id, "status": run.status,
@@ -219,31 +267,32 @@ def get_run(run_id: str):
             "trace": json.loads(r["trace"]), "verdict": json.loads(r["verdict"]) if r["verdict"] else None}
 
 
-@app.get("/approvals")
+@app.get("/approvals", dependencies=[Depends(require_staff)])
 def list_approvals(status: str | None = "pending"):
     return approvals.list_approvals(status)
 
 
-@app.post("/approvals/{approval_id}/decide", dependencies=[Depends(require_admin)])
-def decide(approval_id: str, req: DecideRequest):
+@app.post("/approvals/{approval_id}/decide")
+def decide(approval_id: str, req: DecideRequest, p: Principal = Depends(staff_human)):
+    """Only a person decides, and the decision records who: user id, email, time and note (also in the audit chain)."""
     try:
-        return approvals.decide(approval_id, req.decision, req.note)
+        return approvals.decide(approval_id, req.decision, req.note, {"user_id": p.user_id, "email": p.email})
     except KeyError:
         raise HTTPException(404, "unknown approval")
     except ValueError as exc:
         raise HTTPException(409, str(exc))
 
 
-@app.get("/outcomes")
+@app.get("/outcomes", dependencies=[Depends(require_staff)])
 def outcomes():
     return approvals.outcomes()
 
 
-@app.get("/audit")
+@app.get("/audit", dependencies=[Depends(require_staff)])
 def get_audit(limit: int = 500):
     return audit.entries(limit)
 
 
-@app.get("/audit/verify")
+@app.get("/audit/verify", dependencies=[Depends(require_staff)])
 def verify_audit():
     return audit.verify()

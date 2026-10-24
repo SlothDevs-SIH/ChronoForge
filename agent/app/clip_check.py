@@ -11,6 +11,8 @@ from typing import Protocol
 import numpy as np
 from PIL import Image
 
+from . import config
+
 PROMPTS = {  # category -> (problem present, problem fixed)
     "pothole": ("a pothole on a road", "a smooth intact road"),
     "garbage": ("a pile of garbage on the street", "a clean street"),
@@ -18,9 +20,9 @@ PROMPTS = {  # category -> (problem present, problem fixed)
     "drain": ("a blocked overflowing drain", "a clean clear drain"),
     "water_leak": ("water leaking on the road", "a dry road"),
 }
-SCENE_STILL_BROKEN = 0.65     # P(problem present) at or above this -> closure photo still shows the problem
-DIFFERENT_PLACE = 0.55        # complaint vs closure embedding cosine below this -> probably a different place
-LR_SCENE_BROKEN, LR_DIFFERENT_PLACE = 5.0, 3.0
+SCENE_STILL_BROKEN = config.VC["clip"]["scene_still_broken"]     # P(problem present) at or above this -> closure photo still shows the problem
+DIFFERENT_PLACE = config.VC["clip"]["different_place"]        # complaint vs closure embedding cosine below this -> probably a different place
+LR_SCENE_BROKEN, LR_DIFFERENT_PLACE = config.VC["clip"]["lr_scene_broken"], config.VC["clip"]["lr_different_place"]
 
 
 class Embedder(Protocol):

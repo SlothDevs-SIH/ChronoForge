@@ -1,29 +1,34 @@
-"""Single config file for thresholds, budget and tool costs (contract section 3)."""
+"""Single config file for thresholds, budget and tool costs (contract section 3).
+
+The verification numbers (thresholds, budget, costs, every likelihood ratio) live in verification_config.json, which is
+versioned. Nothing here may change them without a deliberate new version; tests pin the v1 values.
+"""
+import json
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# ---- versioned verification config -----------------------------------------------------------------------------
+VC_PATH = Path(__file__).resolve().parent / "verification_config.json"
+VC: dict = json.loads(VC_PATH.read_text(encoding="utf-8"))
+CONFIG_VERSION: str = VC["version"]
+CALIBRATED: bool = bool(VC["calibrated"])        # False while the likelihood ratios are unmeasured configured priors
+CALIBRATION_NOTE: str = VC["note"]
+
 # Verdict thresholds
-THRESH_NOT_FIXED = 0.75   # posterior >= this -> likely_not_fixed
-THRESH_FIXED = 0.25       # posterior <= this -> verified_fixed
+THRESH_NOT_FIXED = VC["thresholds"]["not_fixed"]   # posterior >= this -> likely_not_fixed
+THRESH_FIXED = VC["thresholds"]["fixed"]           # posterior <= this -> verified_fixed
 
-BUDGET = 10               # total cost units per run
-MAX_STEPS = 8             # hard step cap
+BUDGET = VC["budget"]               # total cost units per run
+MAX_STEPS = VC["max_steps"]         # hard step cap
 
-TOOL_COSTS = {
-    "get_score": 0,
-    "check_photo": 1,
-    "check_satellite": 3,
-    "ask_citizen": 2,
-    "request_human_spot_check": 10,
-    "propose_action": 0,
-}
+TOOL_COSTS = dict(VC["tool_costs"])
 
 # Down-weight for correlated evidence pairs (photo + citizen): ln(LR) of the weaker one is scaled
-CORRELATED_PAIRS = [{"photo", "citizen"}]
-CORRELATION_WEIGHT = 0.7
+CORRELATED_PAIRS = [set(p) for p in VC["correlation"]["pairs"]]
+CORRELATION_WEIGHT = VC["correlation"]["weight"]
 
 REPO_ROOT = Path(os.getenv("REPO_ROOT", Path(__file__).resolve().parents[2]))
 ENGINE_URL = os.getenv("ENGINE_URL", "http://localhost:8001")
@@ -57,3 +62,29 @@ TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
+
+
+# ---- auth, roles, hosting (contract/AUTH_AND_DEPLOY.md) --------------------------------------------------------
+def _csv(name: str) -> list[str]:
+    return [x.strip() for x in os.getenv(name, "").split(",") if x.strip()]
+
+
+AUTH_REQUIRED = os.getenv("AUTH_REQUIRED", "0") == "1"   # 0 keeps the local demo open (treated as a local admin)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+SUPABASE_JWT_AUDIENCE = os.getenv("SUPABASE_JWT_AUDIENCE", "authenticated")
+ADMIN_EMAILS = [e.lower() for e in _csv("ADMIN_EMAILS")]
+CORS_ORIGINS = _csv("CORS_ORIGINS")                      # empty = "*" (local only)
+PUBLIC_DEMO_RUNS = os.getenv("PUBLIC_DEMO_RUNS", "0") == "1"
+ENGINE_SERVICE_TOKEN = os.getenv("ENGINE_SERVICE_TOKEN", "")
+REPLY_LINK_SECRET = os.getenv("REPLY_LINK_SECRET", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "")             # Postgres when set; otherwise SQLite at DB_PATH
+TRUST_PROXY = os.getenv("TRUST_PROXY", "0") == "1"       # read the client address from X-Forwarded-For (behind Render)
+RATE_LIMITS_ENABLED = os.getenv("RATE_LIMITS_ENABLED", "1") == "1"
+
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local")  # local | supabase
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "data/uploads")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "evidence")
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+SIGNED_URL_SECONDS = int(os.getenv("SIGNED_URL_SECONDS", "300"))
