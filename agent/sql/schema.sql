@@ -41,3 +41,13 @@ CREATE TABLE IF NOT EXISTS audit (
   prev_hash TEXT NOT NULL,
   hash TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS citizen_requests (
+  ticket_id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL,         -- needed to send; only chat_hash is ever logged or shown to an LLM
+  chat_hash TEXT NOT NULL,
+  lang TEXT NOT NULL DEFAULT 'en',
+  status TEXT NOT NULL,          -- registered | asked | answered | opted_out
+  created_at TEXT NOT NULL,
+  asked_at TEXT,
+  answered_at TEXT
+);

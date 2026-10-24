@@ -30,3 +30,16 @@ STEP_DELAY = float(os.getenv("STEP_DELAY", "0.4"))   # seconds between steps, fo
 OUTCOME_CHECK_DELAY = float(os.getenv("OUTCOME_CHECK_DELAY", "30"))  # demo mode: 30 s
 PHOTO_INDEX_PATH = os.getenv("PHOTO_INDEX", "data/photo_index.json")
 USE_STUBS = os.getenv("AGENT_USE_STUBS", "1") == "1"  # stub tools until real services are wired
+USE_CLIP = os.getenv("AGENT_USE_CLIP", "0") == "1"    # needs torch + open_clip_torch and a ~400 MB download
+USE_LLM_PLANNER = os.getenv("AGENT_USE_LLM_PLANNER", "0") == "1"
+
+# LLM providers tried in order, then the deterministic planner. Keys live in .env only.
+LLM_PROVIDERS = [p.strip() for p in os.getenv("LLM_PROVIDERS", "gemini,openai").split(",") if p.strip()]
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "15"))
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")

@@ -4,7 +4,7 @@ import hashlib
 
 import httpx
 
-from . import config
+from . import config, telegram
 from .models import Evidence, Score
 from .photo import PhotoIndex, verify_photo
 
@@ -78,7 +78,21 @@ def check_satellite(ticket_id: str, eligible: bool) -> Evidence:
 
 
 def ask_citizen(ticket_id: str) -> Evidence:
-    """Real channel (Telegram) is asynchronous; until it lands this returns the stub reply immediately."""
+    """Real channel (Telegram) is asynchronous: send the message now, the reply becomes Evidence via the
+    webhook. Stubs answer immediately so the loop works without a bot."""
+    if not config.USE_STUBS:
+        t = _get_ticket(ticket_id) or {}
+        sent = False
+        if telegram.has_contact(ticket_id):
+            try:
+                sent = telegram.send_request(ticket_id, t.get("category", "issue"), t.get("ward", "your area"),
+                                             (t.get("closed_at") or "")[:10] or "recently")
+            except Exception:
+                sent = False
+        return Evidence(ticket_id=ticket_id, check="citizen", verdict="inconclusive", likelihood_ratio=1.0,
+                        confidence=0.0, cost=config.TOOL_COSTS["ask_citizen"] if sent else 0,
+                        details={"channel": "telegram", "pending": sent,
+                                 "reason": "awaiting reply" if sent else "no usable contact"})
     bad = stub_truth_false(ticket_id)
     return Evidence(ticket_id=ticket_id, check="citizen",
                     verdict="contradicts_fix" if bad else "supports_fix",

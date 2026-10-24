@@ -3,7 +3,8 @@
 Built so far (see `../backend_ayush.md`): fusion math, deterministic planner + guard, agent loop with SSE trace,
 approvals + outcome check, hash-chained audit log, photo verifier v1 (imagehash + EXIF).
 Tools default to deterministic **stubs** (`AGENT_USE_STUBS=1`, labelled `stub` in the trace) until the Engine,
-Telegram and CLIP are wired. Not built yet: CLIP, Telegram/WhatsApp, LLM planner, LR calibration.
+Telegram and CLIP are wired. Optional: `AGENT_USE_CLIP=1` (install `requirements-clip.txt`), `AGENT_USE_LLM_PLANNER=1` (needs a Gemini or OpenAI key).
+Telegram: `POST /citizen/{ticket}/contact` links a demo chat, webhook is `POST /channels/telegram/webhook`. Not built yet: WhatsApp, LR calibration.
 
     py -m venv .venv && .venv/Scripts/pip install -r requirements.txt
     .venv/Scripts/python -m uvicorn app.main:app --port 8002

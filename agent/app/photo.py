@@ -100,7 +100,8 @@ class PhotoIndex:
 
 
 def verify_photo(ticket_id: str, closure_photo: str, ticket: dict | None = None,
-                 index: PhotoIndex | None = None, cost: int = 1) -> Evidence:
+                 index: PhotoIndex | None = None, cost: int = 1, use_clip: bool | None = None,
+                 complaint_photo: str | None = None, embedder=None) -> Evidence:
     """ticket may carry lat, lng, closed_at (ISO). Missing fields skip the matching check."""
     ticket = ticket or {}
     index = index if index is not None else PhotoIndex()
@@ -130,7 +131,21 @@ def verify_photo(ticket_id: str, closure_photo: str, ticket: dict | None = None,
         details["checks"]["timestamp"] = {"days_before_closure": round(age_days, 1)}
         (flags if age_days > STALE_DAYS else passed).append("timestamp")
 
-    lr_for = {"duplicate": LR_DUPLICATE, "location": LR_GPS_FAR, "timestamp": LR_STALE}
+    # 3. CLIP: does the closure photo still show the problem, and is it the same place as the complaint photo
+    if (config.USE_CLIP if use_clip is None else use_clip) and ticket.get("category"):
+        try:
+            from . import clip_check
+            before = complaint_photo or ticket.get("complaint_photo_url")
+            cf, cp, cd = clip_check.clip_checks(img, ticket["category"],
+                                                load_image(before) if before else None, embedder)
+            flags += cf
+            passed += cp
+            details["checks"].update(cd)
+        except Exception as exc:   # model missing or unreadable photo: keep v1 checks, say so
+            details["clip_error"] = type(exc).__name__
+
+    lr_for = {"duplicate": LR_DUPLICATE, "location": LR_GPS_FAR, "timestamp": LR_STALE,
+              "scene": 5.0, "before_after": 3.0}
     if flags:
         lr = math.prod(lr_for[f] for f in flags)
         verdict, conf = "contradicts_fix", 0.9 if "duplicate" in flags else 0.7

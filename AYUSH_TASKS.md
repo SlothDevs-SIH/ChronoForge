@@ -21,15 +21,15 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [x] Photo verifier v1: imagehash + EXIF
 - [x] Approvals table and endpoints
 - [x] Audit chain (hash-linked) and `/audit/verify`
-- [ ] Photo verifier: add CLIP ViT-B/32 (scene presence, before/after)
+- [x] Photo verifier: add CLIP ViT-B/32 (scene presence, before/after) (code + tests done; real model run still to try)
 - [ ] Call Soham's real Engine score
 - [ ] Demo photo set in `data/photos/` with planted failures
 - [ ] **Milestone:** agent runs on a real scored ticket
 
 ## Phase 3: Citizen channel
-- [ ] Telegram round trip: send, reply, parse, Evidence
+- [ ] Telegram round trip: send, reply, parse, Evidence (code + tests done; needs a real bot token to try live)
 - [x] Keyword/number reply parser (en/hi/mr/kn)
-- [ ] LLM zero-shot fallback for free-text replies
+- [x] LLM zero-shot fallback for free-text replies
 - [ ] Real satellite tool wired in from Soham
 - [ ] **Milestone:** one ticket uses 3 tools
 
@@ -40,9 +40,9 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [ ] **Milestone:** closed loop works
 
 ## Phase 5: LLM planner and WhatsApp, Round B
-- [ ] `llm.py` provider chain: Gemini, OpenAI, deterministic fallback
-- [ ] LLM-chosen tool calls with schema validation, one retry, then fallback
-- [ ] Guardrail tests (ineligible tool, budget, `propose_action` only path, hashed IDs)
+- [x] `llm.py` provider chain: Gemini, OpenAI, deterministic fallback
+- [x] LLM-chosen tool calls with schema validation, one retry, then fallback
+- [x] Guardrail tests (ineligible tool, budget, `propose_action` only path, hashed IDs)
 - [ ] Fallback tested with network off
 - [ ] WhatsApp Cloud round trip (only after Telegram passes)
 - [ ] **Milestone:** full demo

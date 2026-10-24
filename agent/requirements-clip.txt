@@ -1,0 +1,2 @@
+torch>=2.2
+open_clip_torch>=2.24

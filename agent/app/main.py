@@ -2,11 +2,13 @@
 import asyncio
 import json
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
-from . import agent, approvals, audit, config, tools
+from pydantic import BaseModel
+
+from . import agent, approvals, audit, config, llm, llm_planner, telegram, tools
 from .db import get_conn
 from .models import DecideRequest, PhotoRequest
 from .photo import PhotoIndex, verify_photo
@@ -27,6 +29,33 @@ def evidence_photo(req: PhotoRequest):
         return verify_photo(req.ticket_id, req.closure_photo_url, ticket, PhotoIndex())
     except Exception as exc:
         raise HTTPException(422, f"could not read photo: {exc}")
+
+
+class ContactRequest(BaseModel):
+    chat_id: str
+    lang: str = "en"
+
+
+@app.post("/citizen/{ticket_id}/contact")
+def register_contact(ticket_id: str, req: ContactRequest):
+    """Demo only: link a ticket to one of our own registered Telegram chats."""
+    telegram.register_contact(ticket_id, req.chat_id, req.lang)
+    return {"ticket_id": ticket_id, "chat_hash": telegram.chat_hash(req.chat_id)}
+
+
+@app.post("/channels/telegram/webhook")
+def telegram_webhook(update: dict, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
+    if config.TELEGRAM_WEBHOOK_SECRET and x_telegram_bot_api_secret_token != config.TELEGRAM_WEBHOOK_SECRET:
+        raise HTTPException(403, "bad secret")
+    fallback = None
+    if llm.available_providers():
+        fallback = llm_planner.classify_reply
+    ev = telegram.handle_update(update, fallback)
+    if ev is None:
+        return {"ok": True, "evidence": None}
+    run_id = agent.start_run(ev.ticket_id)   # re-run so the new evidence is fused into a fresh verdict
+    agent.run_in_background(run_id)
+    return {"ok": True, "evidence_id": ev.evidence_id, "run_id": run_id}
 
 
 @app.post("/agent/run/{ticket_id}")

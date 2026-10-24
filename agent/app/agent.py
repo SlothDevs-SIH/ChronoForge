@@ -56,15 +56,32 @@ def _explain(state: str, prior: float, post: float, evidence: list[Evidence]) ->
     return f"{head} Probability of a false closure moved from {prior:.0%} to {post:.0%}. {body}."
 
 
-def execute(run_id: str, planner: Planner = choose_next, delay: float | None = None) -> Verdict:
+def default_planner() -> Planner:
+    if config.USE_LLM_PLANNER:
+        from .llm_planner import llm_planner
+        return llm_planner
+    return choose_next
+
+
+def execute(run_id: str, planner: Planner | None = None, delay: float | None = None) -> Verdict:
     run = RUNS[run_id]
+    planner = planner or default_planner()
     delay = config.STEP_DELAY if delay is None else delay
     try:
         score, source = tools.get_score(run.ticket_id)
         run.emit("tool_call", f"get_score -> {score.p_false_closure:.2f} (source: {source})", "get_score")
         prior = score.p_false_closure
         posterior = prior
-        state = PlanState(budget_left=config.BUDGET, satellite_eligible=score.satellite_eligible)
+        state = PlanState(budget_left=config.BUDGET, satellite_eligible=score.satellite_eligible,
+                          prior=prior, posterior=posterior)
+
+        for stored in _answered_citizen_evidence(run.ticket_id):
+            state.used.add("ask_citizen")
+            run.evidence.append(stored)
+            posterior = fusion.fuse(prior, run.evidence)
+            state.posterior, state.evidence = posterior, run.evidence
+            run.emit("tool_result", f"citizen reply on file: {stored.verdict.replace('_', ' ')}, "
+                                    f"LR {stored.likelihood_ratio:g}; posterior {posterior:.2f}", "ask_citizen")
 
         steps = 0
         while fusion.is_uncertain(posterior) and steps < config.MAX_STEPS:
@@ -96,6 +113,7 @@ def execute(run_id: str, planner: Planner = choose_next, delay: float | None = N
             audit.append("tool_result", {"run_id": run_id, "tool": tool, "evidence_id": ev.evidence_id,
                                          "check": ev.check, "verdict": ev.verdict, "lr": ev.likelihood_ratio})
             posterior = fusion.fuse(prior, run.evidence)
+            state.posterior, state.evidence = posterior, run.evidence
             run.emit("tool_result", f"{CHECK_OF_TOOL[tool]}: {ev.verdict.replace('_', ' ')}, "
                                     f"LR {ev.likelihood_ratio:g}; posterior {posterior:.2f}", tool)
 
@@ -119,6 +137,13 @@ def execute(run_id: str, planner: Planner = choose_next, delay: float | None = N
     finally:
         _persist_run(run)
     return verdict
+
+
+def _answered_citizen_evidence(ticket_id: str) -> list[Evidence]:
+    rows = get_conn().execute("SELECT body FROM evidence WHERE ticket_id=? AND run_id IS NULL ORDER BY created_at",
+                              (ticket_id,)).fetchall()
+    out = [Evidence.model_validate_json(r["body"]) for r in rows]
+    return [e for e in out if e.check == "citizen"][-1:]
 
 
 def _store_evidence(ev: Evidence, run_id: str) -> None:

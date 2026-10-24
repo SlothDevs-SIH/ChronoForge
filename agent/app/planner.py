@@ -14,6 +14,9 @@ class PlanState:
     budget_left: int
     satellite_eligible: bool
     used: set[str] = field(default_factory=set)   # tool names already called this run
+    prior: float = 0.5
+    posterior: float = 0.5
+    evidence: list = field(default_factory=list)  # Evidence collected so far
 
 
 def eligible_tools(state: PlanState) -> list[str]:
