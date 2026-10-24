@@ -13,6 +13,9 @@ const AGENT = process.env.AGENT_PROXY ?? "http://127.0.0.1:8002";
 
 export default defineConfig({
   plugins: [react()],
+  // The Vercel-Supabase integration writes the public project values as NEXT_PUBLIC_SUPABASE_*; expose those as well
+  // (only the prefixed, public ones reach the browser).
+  envPrefix: ["VITE_", "NEXT_PUBLIC_SUPABASE_"],
   server: {
     port: 5173,
     proxy: {
