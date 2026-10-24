@@ -11,7 +11,7 @@ import os
 import re
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -116,7 +116,16 @@ class WarehouseStore:
             raise FileNotFoundError(f"no tickets_*.parquet in {self._dir}; run `python -m app.ingest all`")
         self._con.execute("drop view if exists v")
         self._con.execute("drop table if exists tickets")
-        self._con.execute("create table tickets as select * from read_parquet(?, union_by_name=true)", [files])
+        # ENGINE_BENGALURU_FROM=2024-10-01 loads only Bengaluru tickets created on or after that date. The citizen-reopen label
+        # (the only ground truth) exists from Oct 2024; the older years have 14 to 57 reopens a year and carry no evaluable
+        # signal. Other cities and the files on disk are untouched; unset keeps every row.
+        since = os.environ.get("ENGINE_BENGALURU_FROM", "").strip()
+        if since and not re.match(r"^\d{4}-\d{2}-\d{2}$", since):
+            raise ValueError(f"ENGINE_BENGALURU_FROM must look like 2024-10-01, got {since!r}")
+        trim = " where not (city = 'bengaluru' and created_at < ?)" if since else ""
+        self._con.execute("create table tickets as select * from read_parquet(?, union_by_name=true)" + trim,
+                          [files] + ([since] if since else []))
+        self._bounds_cache = None
         # only the demo set carries a "before" photo: keep the column when that file is absent
         self._con.execute("alter table tickets add column if not exists complaint_photo_url varchar")
         for col in ("h3", "closed_at", "closed_by_hash", "closure_note", "closure_photo_url", "complaint_photo_url"):
@@ -131,7 +140,8 @@ class WarehouseStore:
         score_files = sorted(str(f) for f in self._dir.glob("scores_*.parquet"))
         if score_files:
             self._con.execute("create table scores as select ticket_id, p_false_closure, score_type, risk_percentile, "
-                              "model_version, flags from read_parquet(?, union_by_name=true)", [score_files])
+                              "model_version, flags from read_parquet(?, union_by_name=true) "
+                              "where ticket_id in (select ticket_id from tickets)", [score_files])
         else:
             self._con.execute("create table scores (ticket_id varchar, p_false_closure double, score_type varchar, "
                               "risk_percentile double, model_version varchar, flags varchar)")
@@ -147,16 +157,42 @@ class WarehouseStore:
             names = [d[0] for d in cur.description]
             return [dict(zip(names, r)) for r in cur.fetchall()]
 
+    # ---- time window ----
+    def _bounds(self) -> dict[str, tuple[str, str]]:
+        """city -> (earliest, latest) created_at in the loaded data. The latest ticket is the city's 'as of' date."""
+        if self._bounds_cache is None:
+            self._bounds_cache = {r["city"]: (r["lo"], r["hi"]) for r in self._rows(
+                "select city, min(created_at) as lo, max(created_at) as hi from tickets group by city")}
+        return self._bounds_cache
+
+    def _window(self, days: Optional[int], city: Optional[str] = None, col: str = "created_at") -> tuple[str, list]:
+        """SQL condition (and params) for 'raised in the last `days` days of the data'. Counted back from each city's own
+        latest ticket, not from today: the data ends at different dates, and a window from today would be empty."""
+        if not days:
+            return "", []
+        parts, params = [], []
+        for c, (_lo, hi) in self._bounds().items():
+            if city and c != city:
+                continue
+            cutoff = (datetime.fromisoformat(hi.replace("Z", "+00:00")) - timedelta(days=int(days))).strftime("%Y-%m-%dT%H:%M:%SZ")
+            parts.append(f"(city = ? and {col} >= ?)")
+            params += [c, cutoff]
+        return ("(" + " or ".join(parts) + ")" if parts else "false"), params
+
     # ---- tickets ----
     _SCORE_COLS = "_p, _score_type, _pct, _mv, _flags"
 
     def list_tickets(self, *, city=None, ward=None, category=None, status=None, min_score=0.0, limit=100, offset=0,
-                     sort="newest") -> list[TicketWithScore]:
+                     sort="newest", window_days=None) -> list[TicketWithScore]:
         where, params = [], []
         for col, val in (("city", city), ("ward", ward), ("category", category), ("status", status)):
             if val:
                 where.append(f"{col} = ?")
                 params.append(val)
+        w_sql, w_params = self._window(window_days, city)
+        if w_sql:
+            where.append(w_sql)
+            params += w_params
         if min_score > 0:
             where.append("coalesce(_p, 0.5) >= ?")
             params.append(min_score)
@@ -230,15 +266,18 @@ class WarehouseStore:
         tmp.replace(self._web_path())
 
     def _insert_web(self, row: dict) -> None:
+        self._bounds_cache = None
         self._con.execute(f"insert into tickets ({', '.join(TICKET_COLUMNS)}) values ({', '.join('?' * len(TICKET_COLUMNS))})",
                           [row.get(c) for c in TICKET_COLUMNS])
 
-    def reopen_groups(self) -> list[dict[str, Any]]:
+    def reopen_groups(self, window_days: Optional[int] = None) -> list[dict[str, Any]]:
         out = []
+        w_sql, w_params = self._window(window_days)
+        w = f" and {w_sql}" if w_sql else ""
         for kind, col, extra in (("ward", "ward", ""), ("closer", "substr(closed_by_hash, 1, 8)", " and closed_by_hash is not null")):
             out += self._rows(f"select city, '{kind}' as kind, {col} as key, count(*)::int as done, "
                               f"sum((status = 'reopened')::int)::int as reopened from v "
-                              f"where status in ('closed', 'reopened'){extra} group by city, key")
+                              f"where status in ('closed', 'reopened'){extra}{w} group by city, key", w_params)
         return out
 
     def open_web_requests(self) -> list[dict[str, Any]]:
@@ -271,12 +310,16 @@ class WarehouseStore:
         return self.get_ticket(ticket_id)
 
     # ---- aggregates ----
-    def ward_stats(self, city: Optional[str], category: Optional[str]) -> list[dict[str, Any]]:
+    def ward_stats(self, city: Optional[str], category: Optional[str], window_days: Optional[int] = None) -> list[dict[str, Any]]:
         where, params = [], []
         for col, val in (("city", city), ("category", category)):
             if val:
                 where.append(f"{col} = ?")
                 params.append(val)
+        w_sql, w_params = self._window(window_days, city)
+        if w_sql:
+            where.append(w_sql)
+            params += w_params
         sql = ("select city, ward, category, count(*) as tickets, "
                "sum((status='closed')::int)::int as closed, sum((status='reopened')::int)::int as reopened, "
                "sum((status='open')::int)::int as open from v"
@@ -294,23 +337,30 @@ class WarehouseStore:
             })
         return out
 
-    def ward_map(self, city: str) -> list[dict[str, Any]]:
+    def ward_map(self, city: str, window_days: Optional[int] = None) -> list[dict[str, Any]]:
         """One dot per ward: mean ticket position (ward centre for Bengaluru, exact points elsewhere) with closure counts.
         Wards with no position at all are left out. reopen_rate is None when the city has no reopen status."""
+        w_sql, w_params = self._window(window_days, city)
         rows = self._rows(
             "select ward, avg(lat) as lat, avg(lng) as lng, count(*)::int as tickets, "
             "sum((status in ('closed','reopened'))::int)::int as done, sum((status='reopened')::int)::int as reopened "
-            "from v where city = ? and lat is not null and lng is not null group by ward having count(*) >= 20", [city])
+            "from v where city = ? and lat is not null and lng is not null" + (f" and {w_sql}" if w_sql else "")
+            + " group by ward having count(*) >= " + ("5" if window_days else "20"), [city] + w_params)
         return [{"ward": r["ward"], "lat": round(r["lat"], 5), "lng": round(r["lng"], 5), "tickets": r["tickets"],
                  "official_rate": round(r["done"] / r["tickets"], 4),
                  "reopen_rate": round(r["reopened"] / r["done"], 4) if r["done"] else None} for r in rows]
 
-    def cities(self) -> list[dict[str, Any]]:
-        return self._rows(
+    def cities(self, window_days: Optional[int] = None) -> list[dict[str, Any]]:
+        w_sql, w_params = self._window(window_days)
+        rows = self._rows(
             "select city, count(*)::int as tickets, sum((status='closed')::int)::int as closed, "
             "sum((status='reopened')::int)::int as reopened, sum((status='open')::int)::int as open, "
             "any_value(data_quality) as data_quality, any_value(location_precision) as location_precision "
-            "from v group by city order by tickets desc")
+            "from v" + (f" where {w_sql}" if w_sql else "") + " group by city order by tickets desc", w_params)
+        bounds = self._bounds()
+        for r in rows:   # the span of the loaded data, whatever window the counts use
+            r["data_from"], r["data_as_of"] = bounds.get(r["city"], (None, None))
+        return rows
 
     def reload(self) -> None:
         with self._lock:
@@ -328,7 +378,7 @@ class FixtureStore:
         self._evidence: dict = _load("evidence.json")
 
     def list_tickets(self, *, city=None, ward=None, category=None, status=None, min_score=0.0, limit=100, offset=0,
-                     sort="newest") -> list[TicketWithScore]:
+                     sort="newest", window_days=None) -> list[TicketWithScore]:
         out = []
         for t in self.tickets.values():
             s = self.scores[t.ticket_id]
@@ -357,7 +407,7 @@ class FixtureStore:
     def muni_tickets(self, limit: int) -> list[Ticket]:
         return list(self.tickets.values())[:limit]
 
-    def reopen_groups(self) -> list[dict[str, Any]]:
+    def reopen_groups(self, window_days: Optional[int] = None) -> list[dict[str, Any]]:
         return []
 
     def open_web_requests(self) -> list[dict[str, Any]]:
@@ -369,13 +419,13 @@ class FixtureStore:
     def close_request(self, ticket_id: str, note: str):
         raise NotImplementedError("website requests need the warehouse store (ENGINE_DATA_MODE=warehouse)")
 
-    def ward_stats(self, city: Optional[str], category: Optional[str]) -> list[dict[str, Any]]:
+    def ward_stats(self, city: Optional[str], category: Optional[str], window_days: Optional[int] = None) -> list[dict[str, Any]]:
         return [w for w in self._ward_stats if (not city or w["city"] == city) and (not category or w["category"] == category)]
 
-    def ward_map(self, city: str) -> list[dict[str, Any]]:
+    def ward_map(self, city: str, window_days: Optional[int] = None) -> list[dict[str, Any]]:
         return []
 
-    def cities(self) -> list[dict[str, Any]]:
+    def cities(self, window_days: Optional[int] = None) -> list[dict[str, Any]]:
         by: dict[str, dict] = {}
         for t in self.tickets.values():
             c = by.setdefault(t.city, {"city": t.city, "tickets": 0, "closed": 0, "reopened": 0, "open": 0,

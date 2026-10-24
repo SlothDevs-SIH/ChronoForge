@@ -12,7 +12,7 @@ export const api = {
   // ---- Engine
   engineHealth: () => E<{ ok: boolean; mode: string }>("/health", { auth: false }),
   agentHealth: () => A<{ ok: boolean; stubs: boolean }>("/health", { auth: false }),
-  cities: () => E<CitySummary[]>("/cities", { auth: false }),
+  cities: (windowDays?: number) => E<CitySummary[]>(`/cities${windowDays ? `?window_days=${windowDays}` : ""}`, { auth: false }),
   evalResults: () => E<Record<string, unknown>>("/eval/results", { auth: false }),
   tickets: (city?: string, status?: string, limit = 100, sort: "newest" | "risk" = "newest", offset = 0, extra: Record<string, string> = {}) => {
     const q = new URLSearchParams({ limit: String(limit), sort, offset: String(offset), ...extra });
@@ -22,8 +22,13 @@ export const api = {
   },
   ticket: (id: string) => E<Ticket>(`/tickets/${encodeURIComponent(id)}`),
   score: (id: string) => E<Score>(`/tickets/${encodeURIComponent(id)}/score`),
-  wardStats: (city?: string) => E<WardStat[]>(`/wards/stats${city ? `?city=${encodeURIComponent(city)}` : ""}`),
-  wardMap: (city: string) => E<WardDot[]>(`/wards/map?city=${encodeURIComponent(city)}`),
+  wardStats: (city?: string, windowDays?: number) => {
+    const q = new URLSearchParams();
+    if (city) q.set("city", city);
+    if (windowDays) q.set("window_days", String(windowDays));
+    return E<WardStat[]>(`/wards/stats${q.size ? `?${q}` : ""}`);
+  },
+  wardMap: (city: string, windowDays?: number) => E<WardDot[]>(`/wards/map?city=${encodeURIComponent(city)}${windowDays ? `&window_days=${windowDays}` : ""}`),
   satelliteCheck: (ticketId: string, cachedOnly = true) =>
     E<Evidence>("/satellite/check", { method: "POST", body: { ticket_id: ticketId, cached_only: cachedOnly } }),
   /** Demo set photos, served by the Engine (open-licence images, see demo/photos/ATTRIBUTION.md). Public. */
@@ -69,7 +74,7 @@ export const api = {
   summary: (days: number) => A<Summary>(`/admin/summary?days=${days}`),
   retryApproval: (id: string) => A<Approval>(`/approvals/${encodeURIComponent(id)}/retry`, { method: "POST" }),
   closeRequest: (id: string) => A<{ ticket_id: string; status: string }>(`/admin/requests/${encodeURIComponent(id)}/close`, { method: "POST" }),
-  hotspots: () => E<{ rule: string; caveat: string; hotspots: Hotspot[] }>("/insights/hotspots"),
+  hotspots: (windowDays?: number) => E<{ rule: string; caveat: string; hotspots: Hotspot[] }>(`/insights/hotspots${windowDays ? `?window_days=${windowDays}` : ""}`),
 
   /** Live agent trace. The Agent sends NAMED events (`trace`, `end`); the stream carries the Authorization header. */
   streamRun(runId: string, onEvent: (e: TraceEvent) => void, onEnd: (failed: boolean) => void): () => void {

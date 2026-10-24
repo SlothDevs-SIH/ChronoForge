@@ -197,7 +197,7 @@ def test_ward_map_endpoint_returns_dots_with_rates(monkeypatch):
     from fastapi.testclient import TestClient
     from app import main
     dots = [{"ward": "W1", "lat": 12.9, "lng": 77.5, "tickets": 30, "official_rate": 0.9, "reopen_rate": 0.02}]
-    monkeypatch.setattr(main.store, "ward_map", lambda city: dots if city == "bengaluru" else [], raising=False)
+    monkeypatch.setattr(main.store, "ward_map", lambda city, window_days=None: dots if city == "bengaluru" else [], raising=False)
     c = TestClient(main.app)
     assert c.get("/wards/map", params={"city": "bengaluru"}).json() == dots
     assert c.get("/wards/map", params={"city": "nowhere"}).json() == []

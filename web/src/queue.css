@@ -38,3 +38,11 @@
 .citizen-photo { display: grid; gap: 8px; }
 .citizen-photo strong, .citizen-photo small { display: block; } .citizen-photo small { color: var(--tc-muted); font-size: 12px; overflow-wrap: anywhere; }
 .citizen-photo img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 10px; }
+
+.period-switch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 18px; }
+.period-buttons { display: inline-flex; padding: 3px; border: 1px solid var(--tc-border); border-radius: 10px; background: white; }
+.period-buttons button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--tc-muted); font: 600 13px/1 inherit; cursor: pointer; }
+.period-buttons button:hover { color: var(--tc-forest); }
+.period-buttons button.is-on { background: var(--tc-forest); color: white; }
+.period-buttons button:focus-visible { outline: 2px solid var(--tc-forest); outline-offset: 2px; }
+.period-note { margin: 0; color: var(--tc-muted); font-size: 12px; line-height: 1.45; }

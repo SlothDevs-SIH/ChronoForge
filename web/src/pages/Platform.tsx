@@ -102,7 +102,7 @@ function DemoRun() {
 
 export default function Platform() {
   const { engine, agent } = useConnection();
-  const cities = useQuery({ queryKey: ["cities"], queryFn: api.cities, retry: false });
+  const cities = useQuery({ queryKey: ["cities"], queryFn: () => api.cities(), retry: false });
   const down = engine.state === "offline" || agent.state === "offline";
 
   return (

@@ -7,7 +7,7 @@ Photo sources, in order:
 1. The Engine's demo set: the twelve `DEMO-*` tickets have a real "as reported" photo (open licence, see
    `demo/photos/ATTRIBUTION.md`). These need no entry here.
 2. Entries in `photos` in `index.json` in this folder (one ticket, one photo of that ticket).
-3. `categories` in `index.json`: a **synthetic** stand-in image per complaint category (pothole, garbage, streetlight, drain), for real tickets whose source data has no photo. The files `synthetic-*.jpg` are AI-generated, not photos of any real site; the card labels them "Synthetic image, not a photo of this site" and the badge reads "... record, synthetic image". They are never used as evidence. No water-leak or "other" image exists yet, so those tickets still say "No photo on file". To add variety, add more files to a category's list; a ticket always gets the same one.
+3. `categories` in `index.json`: **synthetic** stand-in images per complaint category (pothole, garbage, streetlight, drain; five different scenes each, chosen by ticket id so a ticket always shows the same one), for real tickets whose source data has no photo. The files `synthetic-*.jpg` are AI-generated, not photos of any real site; the card labels them "Synthetic image, not a photo of this site" and the badge reads "... record, synthetic image". They are never used as evidence. No water-leak or "other" image exists yet, so those tickets still say "No photo on file". To add variety, add more files to a category's list; a ticket always gets the same one.
 
 ## Adding a photo for a ticket
 

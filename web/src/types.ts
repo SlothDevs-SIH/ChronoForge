@@ -97,6 +97,9 @@ export interface CitySummary {
   city: City; tickets: number; closed: number; reopened: number; open: number;
   data_quality: "real" | "partial" | "synthetic";
   location_precision: "exact" | "generated" | "ward_centroid" | "none" | null;
+  /** Span of the loaded data for this city (the counts above follow the requested window). */
+  data_from?: string | null;
+  data_as_of?: string | null;
 }
 
 export interface Approval {

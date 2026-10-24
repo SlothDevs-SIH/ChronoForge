@@ -584,8 +584,30 @@
   "paths": {
     "/cities": {
       "get": {
-        "description": "Per-city counts and data-quality badge inputs for the UI's city switcher.",
+        "description": "Per-city counts and data-quality badge inputs for the UI's city switcher. `data_from` / `data_as_of` give the span\nof the loaded data; the counts follow `window_days` when it is set.",
         "operationId": "cities_cities_get",
+        "parameters": [
+          {
+            "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+            "in": "query",
+            "name": "window_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3650,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+              "title": "Window Days"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -601,6 +623,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Cities"
@@ -751,6 +783,26 @@
               "minimum": 10,
               "title": "Min Closed",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+            "in": "query",
+            "name": "window_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3650,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+              "title": "Window Days"
             }
           },
           {
@@ -1641,6 +1693,26 @@
             }
           },
           {
+            "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+            "in": "query",
+            "name": "window_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3650,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+              "title": "Window Days"
+            }
+          },
+          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -1859,6 +1931,26 @@
             }
           },
           {
+            "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+            "in": "query",
+            "name": "window_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3650,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+              "title": "Window Days"
+            }
+          },
+          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -1968,6 +2060,26 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+            "in": "query",
+            "name": "window_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3650,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket.",
+              "title": "Window Days"
             }
           },
           {

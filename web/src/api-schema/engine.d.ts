@@ -13,7 +13,8 @@ export interface paths {
         };
         /**
          * Cities
-         * @description Per-city counts and data-quality badge inputs for the UI's city switcher.
+         * @description Per-city counts and data-quality badge inputs for the UI's city switcher. `data_from` / `data_as_of` give the span
+         *     of the loaded data; the counts follow `window_days` when it is set.
          */
         get: operations["cities_cities_get"];
         put?: never;
@@ -608,7 +609,10 @@ export type $defs = Record<string, never>;
 export interface operations {
     cities_cities_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket. */
+                window_days?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -624,6 +628,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -713,6 +726,8 @@ export interface operations {
         parameters: {
             query?: {
                 min_closed?: number;
+                /** @description Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket. */
+                window_days?: number | null;
             };
             header?: {
                 authorization?: string | null;
@@ -1094,6 +1109,8 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 sort?: "newest" | "risk";
+                /** @description Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket. */
+                window_days?: number | null;
             };
             header?: {
                 authorization?: string | null;
@@ -1196,6 +1213,8 @@ export interface operations {
         parameters: {
             query: {
                 city: string;
+                /** @description Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket. */
+                window_days?: number | null;
             };
             header?: {
                 authorization?: string | null;
@@ -1234,6 +1253,8 @@ export interface operations {
                 city?: string | null;
                 category?: string | null;
                 limit?: number;
+                /** @description Only tickets raised in the last N days of the data, counted back from each city's latest ticket (not from today). Omit for every loaded ticket. */
+                window_days?: number | null;
             };
             header?: {
                 authorization?: string | null;

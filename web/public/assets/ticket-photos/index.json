@@ -1,11 +1,95 @@
 {
   "version": 2,
-  "about": "Photos shown on complaint cards. `photos` maps a ticket id to a file (only for the ticket it actually shows). `categories` gives a synthetic stand-in image per complaint category for tickets whose source data has no photo; every such image is labelled as synthetic on the card.",
+  "about": "Photos shown on complaint cards. `photos` maps a ticket id to a file (only for the ticket it actually shows). `categories` gives synthetic stand-in images per complaint category (five scenes each) for tickets whose source data has no photo; a ticket always gets the same one, and every such image is labelled as synthetic on the card.",
   "photos": {},
   "categories": {
-    "pothole": [{ "file": "synthetic-pothole-1.jpg", "alt": "Synthetic image of a water-filled pothole on a city road" }],
-    "garbage": [{ "file": "synthetic-garbage-1.jpg", "alt": "Synthetic image of overflowing garbage beside a roadside bin" }],
-    "streetlight": [{ "file": "synthetic-streetlight-1.jpg", "alt": "Synthetic image of a broken street light at dusk" }],
-    "drain": [{ "file": "synthetic-drain-1.jpg", "alt": "Synthetic image of a blocked roadside drain with stagnant water" }]
+    "pothole": [
+      {
+        "file": "synthetic-pothole-1.jpg",
+        "alt": "Synthetic image of a water-filled pothole on a city road"
+      },
+      {
+        "file": "synthetic-pothole-2.jpg",
+        "alt": "Synthetic image of a dry cracked pothole on a residential lane"
+      },
+      {
+        "file": "synthetic-pothole-3.jpg",
+        "alt": "Synthetic image of several potholes across a busy main road"
+      },
+      {
+        "file": "synthetic-pothole-4.jpg",
+        "alt": "Synthetic image of a muddy water-filled pothole beside a bus stop"
+      },
+      {
+        "file": "synthetic-pothole-5.jpg",
+        "alt": "Synthetic image of a crater-like pothole beside a footpath with a barricade"
+      }
+    ],
+    "garbage": [
+      {
+        "file": "synthetic-garbage-1.jpg",
+        "alt": "Synthetic image of overflowing garbage beside a roadside bin"
+      },
+      {
+        "file": "synthetic-garbage-2.jpg",
+        "alt": "Synthetic image of litter spread along a roadside near a market"
+      },
+      {
+        "file": "synthetic-garbage-3.jpg",
+        "alt": "Synthetic image of construction rubble dumped on a footpath"
+      },
+      {
+        "file": "synthetic-garbage-4.jpg",
+        "alt": "Synthetic image of an overflowing dumpster behind an apartment block"
+      },
+      {
+        "file": "synthetic-garbage-5.jpg",
+        "alt": "Synthetic image of household waste dumped on a vacant plot"
+      }
+    ],
+    "streetlight": [
+      {
+        "file": "synthetic-streetlight-1.jpg",
+        "alt": "Synthetic image of a broken street light at dusk"
+      },
+      {
+        "file": "synthetic-streetlight-2.jpg",
+        "alt": "Synthetic image of a row of street lights at dusk"
+      },
+      {
+        "file": "synthetic-streetlight-3.jpg",
+        "alt": "Synthetic image of a leaning street light pole with hanging wires"
+      },
+      {
+        "file": "synthetic-streetlight-4.jpg",
+        "alt": "Synthetic image of a dark street at night with an unlit lamp"
+      },
+      {
+        "file": "synthetic-streetlight-5.jpg",
+        "alt": "Synthetic image of a single dim street lamp at dusk"
+      }
+    ],
+    "drain": [
+      {
+        "file": "synthetic-drain-1.jpg",
+        "alt": "Synthetic image of a blocked roadside drain with stagnant water"
+      },
+      {
+        "file": "synthetic-drain-2.jpg",
+        "alt": "Synthetic image of an open manhole with a missing cover"
+      },
+      {
+        "file": "synthetic-drain-3.jpg",
+        "alt": "Synthetic image of a clogged lane drain overflowing onto the street"
+      },
+      {
+        "file": "synthetic-drain-4.jpg",
+        "alt": "Synthetic image of a waterlogged road with an overflowing drain"
+      },
+      {
+        "file": "synthetic-drain-5.jpg",
+        "alt": "Synthetic image of a collapsed concrete slab over a stormwater drain"
+      }
+    ]
   }
 }

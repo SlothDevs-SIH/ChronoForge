@@ -104,7 +104,7 @@ export default function HowItWorks() {
   const [activeId, setActiveId] = useState(STEPS[0].id);
   const [evalOpen, setEvalOpen] = useState(false);
   const step = STEPS.find((s) => s.id === activeId) ?? STEPS[0];
-  const cities = useQuery({ queryKey: ["cities"], queryFn: api.cities, retry: false });
+  const cities = useQuery({ queryKey: ["cities"], queryFn: () => api.cities(), retry: false });
   const total = cities.data?.reduce((n, c) => n + c.tickets, 0);
   const items: DockItem[] = [
     ...STEPS.map((s, i) => ({ id: s.id, label: s.title, icon: s.icon, hint: `Step ${i + 1}` })),

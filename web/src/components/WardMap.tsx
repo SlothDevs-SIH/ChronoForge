@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
+import { usePeriod } from "../hooks/usePeriod";
 
 type Mode = "official" | "reopen";
 const RAMP = ["#dfe9dc", "#b4cdb0", "#79a58b", "#3f7a60", "#163d32"];   // one hue, light to dark
@@ -14,7 +15,8 @@ const MODES: Record<Mode, { label: string; caption: string }> = {
 /** Ward dots for one city, coloured in five quantile steps. A table below gives the same data to keyboard and screen-reader users. */
 export default function WardMap({ city }: { city: string }) {
   const [mode, setMode] = useState<Mode>("official");
-  const { data, isPending, error } = useQuery({ queryKey: ["wardmap", city], queryFn: () => api.wardMap(city), retry: false });
+  const { days } = usePeriod();
+  const { data, isPending, error } = useQuery({ queryKey: ["wardmap", city, days], queryFn: () => api.wardMap(city, days), retry: false });
 
   const view = useMemo(() => {
     const rows = (data ?? []).map((d) => ({ ...d, value: mode === "official" ? d.official_rate : d.reopen_rate }));

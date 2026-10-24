@@ -19,6 +19,8 @@ COPY demo/photos /srv/demo/photos
 
 # ENGINE_DUCKDB_PATH / ENGINE_MEMORY_LIMIT keep the ticket tables in a scratch file with at most 200 MB in RAM: the Engine then
 # peaks near 320 MB instead of 570 MB, so it fits a 512 MB host. Remove those three to hold everything in memory on a big host.
+# ENGINE_BENGALURU_FROM loads only Bengaluru tickets created from 2024-10-01 (180,263 of 733,721): the citizen-reopen label, the only
+# ground truth, exists from then. Remove it to load every Bengaluru ticket.
 # The warehouse is NOT baked in: bootstrap downloads it from WAREHOUSE_URL into WAREHOUSE_DIR (a persistent disk).
 ENV CONTRACT_DIR=/srv/contract \
     WAREHOUSE_DIR=/var/data/warehouse \
@@ -26,6 +28,7 @@ ENV CONTRACT_DIR=/srv/contract \
     ENGINE_DUCKDB_PATH=/tmp/engine.duckdb \
     ENGINE_MEMORY_LIMIT=200MB \
     ENGINE_THREADS=2 \
+    ENGINE_BENGALURU_FROM=2024-10-01 \
     PYTHONUNBUFFERED=1 \
     PORT=8001
 RUN mkdir -p /var/data/warehouse /var/data/cache/satellite && chown -R trueclose /var/data /srv

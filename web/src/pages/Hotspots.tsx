@@ -1,14 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
+import PeriodSwitch from "../components/PeriodSwitch";
+import { usePeriod } from "../hooks/usePeriod";
 
 export default function Hotspots() {
-  const { data, error, isLoading } = useQuery({ queryKey: ["hotspots"], queryFn: api.hotspots, retry: false });
+  const { days } = usePeriod();
+  const { data, error, isLoading } = useQuery({ queryKey: ["hotspots", days], queryFn: () => api.hotspots(days), retry: false });
   if (isLoading) return <div className="loading-state">Looking for repeat reopens…</div>;
   if (error) return <div className="error-state">Could not load the analysis. Check that the Engine is running. ({String(error)})</div>;
   const rows = data?.hotspots ?? [];
   return (
     <>
       <div className="page-heading"><div><h1>Repeat reopens</h1><p>Wards and closing officers whose closures are reopened far more often than the rest of their city.</p></div><span className="badge">{rows.length} flagged</span></div>
+      <PeriodSwitch />
       {rows.length === 0 && <div className="empty-state"><strong>Nothing stands out.</strong><p>No ward or officer is reopened significantly more than their city average, or the cities loaded have no reopen data.</p></div>}
       {rows.length > 0 && (
         <section className="content-card"><div className="table-wrap"><table>

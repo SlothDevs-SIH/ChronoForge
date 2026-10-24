@@ -25,6 +25,11 @@ function AppShell() {
   const { me, email, signOut, status } = useAuth();
   const location = useLocation();
   const city = params.get("city") ?? "";
+  const period = params.get("period") ?? "";
+  const keep = new URLSearchParams();
+  if (city) keep.set("city", city);
+  if (period) keep.set("period", period);
+  const suffix = keep.size ? `?${keep}` : "";
   const link = ({ isActive }: { isActive: boolean }) => (isActive ? "active" : "");
   const staff = me?.role === "officer" || me?.role === "admin";
   return (
@@ -33,10 +38,10 @@ function AppShell() {
         <Brand />
         <nav className="app-nav" aria-label="Application">
           {staff && <>
-            <NavLink to="/dashboard" className={link}>Overview</NavLink>
-            <NavLink to={`/triage${city ? `?city=${city}` : ""}`} className={link}>Triage queue</NavLink>
+            <NavLink to={`/dashboard${suffix}`} className={link}>Overview</NavLink>
+            <NavLink to={`/triage${suffix}`} className={link}>Triage queue</NavLink>
             <NavLink to="/approvals" className={link}>Approvals</NavLink>
-            <NavLink to="/hotspots" className={link}>Repeat reopens</NavLink>
+            <NavLink to={`/hotspots${suffix}`} className={link}>Repeat reopens</NavLink>
             <NavLink to="/audit" className={link}>Audit log</NavLink>
           </>}
           {me?.role === "admin" && <NavLink to="/admin" className={link}>Admin</NavLink>}
@@ -46,7 +51,7 @@ function AppShell() {
           {staff && <ConnectionBadge />}
           {staff && (
             <label className="city-control"><span>City</span>
-              <select value={city} onChange={(e) => setParams(e.target.value ? { city: e.target.value } : {})}>
+              <select value={city} onChange={(e) => setParams((prev) => { const next = new URLSearchParams(prev); if (e.target.value) next.set("city", e.target.value); else next.delete("city"); return next; })}>
                 <option value="">All cities</option>
                 {CITIES.map((c) => <option key={c} value={c}>{c[0].toUpperCase() + c.slice(1)}</option>)}
               </select>

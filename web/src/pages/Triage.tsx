@@ -5,6 +5,8 @@ import WardMap from "../components/WardMap";
 import ComplaintCard, { riskPin } from "../components/ComplaintCard";
 import { EmptyState, ErrorState, Skeleton } from "../components/States";
 import { api } from "../api";
+import PeriodSwitch from "../components/PeriodSwitch";
+import { usePeriod } from "../hooks/usePeriod";
 import type { Score, TicketWithScore } from "../types";
 
 // Only the synthetic cities carry a calibrated probability. Everything else is a rank or a bounded prior,
@@ -31,7 +33,8 @@ function shortRisk(s: Score): string {
 
 // Reopen rate per category from the city records: a single-hue bar list with direct labels and a table underneath.
 function ReopenChart({ city }: { city: string }) {
-  const { data, isPending, error } = useQuery({ queryKey: ["wards", city], queryFn: () => api.wardStats(city || undefined), retry: false });
+  const { days } = usePeriod();
+  const { data, isPending, error } = useQuery({ queryKey: ["wards", city, days], queryFn: () => api.wardStats(city || undefined, days), retry: false });
   const rows = useMemo(() => {
     const by = new Map<string, { closed: number; reopened: number }>();
     for (const w of data ?? []) {
@@ -103,23 +106,30 @@ function Queue({ city, rows, loading, error, retry, page, setPage, hasNext }: {
   );
 }
 
+/** `?city=..&period=..` for a link that keeps both. */
+function keepQuery(city: string, period: string) {
+  const q = new URLSearchParams();
+  if (city) q.set("city", city);
+  if (period) q.set("period", period);
+  return q.size ? `?${q}` : "";
+}
+
 export default function Triage({ city, overview = false }: { city: string; overview?: boolean }) {
   const nav = useNavigate();
   const [status, setStatus] = useState("closed");
   const [category, setCategory] = useState("");
   const [sort, setSort] = useState<"risk" | "newest">("risk");
   const [minScore, setMinScore] = useState("0");
-  const [days, setDays] = useState("0");
+  const period = usePeriod();
   const [page, setPage] = useState(0);
   const [find, setFind] = useState("");
-  const [now] = useState(() => Date.now());
   const onFilter = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(0); };
 
   const pending = useQuery({ queryKey: ["approvals", "pending"], queryFn: () => api.approvals("pending"), retry: false, enabled: overview });
-  const top = useQuery({ queryKey: ["tickets", "top", city], queryFn: () => api.tickets(city || undefined, "closed", 100, "risk"), enabled: overview, retry: false });
+  const top = useQuery({ queryKey: ["tickets", "top", city, period.days], queryFn: () => api.tickets(city || undefined, "closed", 100, "risk", 0, period.days ? { window_days: String(period.days) } : {}), enabled: overview, retry: false });
   const list = useQuery({
-    queryKey: ["tickets", "queue", city, status, category, sort, minScore, page],
-    queryFn: () => api.tickets(city || undefined, status || undefined, PAGE, sort, page * PAGE, { ...(category ? { category } : {}), ...(Number(minScore) > 0 ? { min_score: minScore } : {}) }),
+    queryKey: ["tickets", "queue", city, status, category, sort, minScore, period.days, page],
+    queryFn: () => api.tickets(city || undefined, status || undefined, PAGE, sort, page * PAGE, { ...(category ? { category } : {}), ...(Number(minScore) > 0 ? { min_score: minScore } : {}), ...(period.days ? { window_days: String(period.days) } : {}) }),
     enabled: !overview, retry: false, placeholderData: (prev) => prev,
   });
 
@@ -133,7 +143,8 @@ export default function Triage({ city, overview = false }: { city: string; overv
     const synthCity = ["pune", "synthetic", "demo"].includes(mapCity);
     return (
       <>
-        <div className="page-heading"><div><h1>City overview</h1><p>The cases that need independent verification.</p></div><Link className="btn btn-primary btn-sm" to={`/triage${city ? `?city=${city}` : ""}`}>Open the triage queue</Link></div>
+        <div className="page-heading"><div><h1>City overview</h1><p>The cases that need independent verification.</p></div><Link className="btn btn-primary btn-sm" to={`/triage${keepQuery(city, period.value)}`}>Open the triage queue</Link></div>
+        <PeriodSwitch />
         <div className="metric-grid">
           <div className="metric-card"><span>Highest-risk tickets loaded</span><strong>{rows.length.toLocaleString()}</strong><small>Top {rows.length} by risk, not the whole city</small></div>
           <div className="metric-card"><span>Needs review</span><strong>{risky}</strong><small>With a flag or high risk signal</small></div>
@@ -142,7 +153,7 @@ export default function Triage({ city, overview = false }: { city: string; overv
         </div>
         <div className="dashboard-grid">
           <section className="app-card"><div className="app-card-header"><h2>Ward map: {mapCity[0].toUpperCase() + mapCity.slice(1)}</h2><span className={`badge ${synthCity ? "synthetic" : "real"}`}>{synthCity ? "Synthetic city" : "Real records"}</span></div><div className="app-card-body"><WardMap city={mapCity} />{!city && <p className="fine">Showing Bengaluru. Pick another city in the bar above to change the map.</p>}</div></section>
-          <section className="app-card"><div className="app-card-header"><h2>Priority queue</h2><Link className="text-link" to={`/triage${city ? `?city=${city}` : ""}`}>See all</Link></div><div className="app-card-body">
+          <section className="app-card"><div className="app-card-header"><h2>Priority queue</h2><Link className="text-link" to={`/triage${keepQuery(city, period.value)}`}>See all</Link></div><div className="app-card-body">
             {rows.length === 0 ? <EmptyState title="Nothing to review">No closed tickets are loaded for this view.</EmptyState> :
               <div className="priority-list">{rows.slice(0, 4).map(({ ticket, score }) => <Link className="priority-item" to={`/ticket/${ticket.ticket_id}`} key={ticket.ticket_id}><span className="priority-icon">{score.p_false_closure >= 0.7 ? "!" : "·"}</span><span><strong>{ticket.ticket_id}</strong><small>{ticket.category} · {ticket.ward}</small></span><b>{shortRisk(score)}</b></Link>)}</div>}
           </div></section>
@@ -154,8 +165,7 @@ export default function Triage({ city, overview = false }: { city: string; overv
     );
   }
 
-  const cutoff = Number(days) > 0 ? now - Number(days) * 86_400_000 : 0;
-  const rows = (list.data ?? []).filter(({ ticket }) => !cutoff || (ticket.closed_at && new Date(ticket.closed_at).getTime() >= cutoff));
+  const rows = list.data ?? [];
   return (
     <>
       <div className="page-heading"><div><h1>Triage queue</h1><p>Closed tickets ranked by risk. For real cities this is a rank, not a probability.</p></div>
@@ -169,8 +179,8 @@ export default function Triage({ city, overview = false }: { city: string; overv
         <label>Category<select value={category} onChange={(e) => onFilter(setCategory)(e.target.value)}><option value="">All</option>{CATEGORIES.map((c) => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}</select></label>
         <label>Sort by<select value={sort} onChange={(e) => onFilter(setSort)(e.target.value as "risk" | "newest")}><option value="risk">Highest risk</option><option value="newest">Newest</option></select></label>
         <label>Minimum score<select value={minScore} onChange={(e) => onFilter(setMinScore)(e.target.value)}><option value="0">Any</option><option value="0.4">0.4 or higher</option><option value="0.6">0.6 or higher</option><option value="0.8">0.8 or higher</option></select></label>
-        <label>Closed within<select value={days} onChange={(e) => setDays(e.target.value)}><option value="0">Any time</option><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option></select></label>
       </div>
+      <PeriodSwitch onChange={() => setPage(0)} />
       <section className="content-card"><div className="app-card-header"><h2>Tickets</h2><span className="badge">{rows.length} on this page</span></div>
         <Queue city={city} rows={rows} loading={list.isLoading} error={list.error} retry={() => void list.refetch()} page={page} setPage={setPage} hasNext={(list.data?.length ?? 0) === PAGE} /></section>
     </>

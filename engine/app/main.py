@@ -53,10 +53,15 @@ def ready():
     return JSONResponse(body, status_code=200 if ok else 503)
 
 
+WINDOW_DAYS = Query(None, ge=1, le=3650, description="Only tickets raised in the last N days of the data, counted back from "
+                    "each city's latest ticket (not from today). Omit for every loaded ticket.")
+
+
 @app.get("/cities")
-def cities() -> list[dict]:
-    """Per-city counts and data-quality badge inputs for the UI's city switcher."""
-    return store.cities()
+def cities(window_days: Optional[int] = WINDOW_DAYS) -> list[dict]:
+    """Per-city counts and data-quality badge inputs for the UI's city switcher. `data_from` / `data_as_of` give the span
+    of the loaded data; the counts follow `window_days` when it is set."""
+    return store.cities(window_days)
 
 
 @app.get("/tickets", response_model=list[TicketWithScore], dependencies=[Depends(auth.staff)])
@@ -69,11 +74,12 @@ def list_tickets(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     sort: Literal["newest", "risk"] = "newest",
+    window_days: Optional[int] = WINDOW_DAYS,
 ) -> list[TicketWithScore]:
     """sort=newest (default) or sort=risk (highest p_false_closure first). Read score.score_type before treating
     p_false_closure as a probability: only the synthetic cities are calibrated; Bengaluru and Mumbai are bounded priors."""
     return store.list_tickets(city=city, ward=ward, category=category, status=status, min_score=min_score,
-                              limit=limit, offset=offset, sort=sort)
+                              limit=limit, offset=offset, sort=sort, window_days=window_days)
 
 
 @app.get("/tickets/{ticket_id}", response_model=Ticket, dependencies=[Depends(auth.ticket_reader)])
@@ -127,15 +133,15 @@ def demo_photo(ticket_id: str, which: Literal["before", "after"]):
 
 @app.get("/wards/stats", dependencies=[Depends(auth.staff)])
 def ward_stats(city: Optional[str] = None, category: Optional[str] = None,
-               limit: int = Query(500, ge=1, le=5000)) -> list[dict]:
+               limit: int = Query(500, ge=1, le=5000), window_days: Optional[int] = WINDOW_DAYS) -> list[dict]:
     """official_rate = share of tickets no longer open. honest_rate is null until the scorer exists."""
-    return store.ward_stats(city, category)[:limit]
+    return store.ward_stats(city, category, window_days)[:limit]
 
 
 @app.get("/wards/map", dependencies=[Depends(auth.staff)])
-def ward_map(city: str) -> list[dict]:
+def ward_map(city: str, window_days: Optional[int] = WINDOW_DAYS) -> list[dict]:
     """Ward dots for the overview map: position, official rate and reopen rate (null where the city has no reopen status)."""
-    return store.ward_map(city)
+    return store.ward_map(city, window_days)
 
 
 @app.get("/eval/results")
@@ -196,11 +202,11 @@ def similar_requests(category: str, text: str, ward: str = "", limit: int = Quer
 
 
 @app.get("/insights/hotspots", dependencies=[Depends(auth.staff)])
-def hotspots(min_closed: int = Query(insights.MIN_CLOSED, ge=10, le=1000)) -> dict:
+def hotspots(min_closed: int = Query(insights.MIN_CLOSED, ge=10, le=1000), window_days: Optional[int] = WINDOW_DAYS) -> dict:
     """Wards and closing officers (by hash) whose closures are reopened far more often than their city average."""
     return {"min_closed": min_closed, "rule": "one-sided binomial test, Bonferroni-corrected, and at least 1.5 times the city rate",
             "caveat": "A reopen is a proxy for a bad closure and this shows where reopens cluster, not who is at fault.",
-            "hotspots": insights.hotspots(store.reopen_groups(), min_closed)}
+            "hotspots": insights.hotspots(store.reopen_groups(window_days), min_closed)}
 
 
 @app.post("/muni/tickets/{ticket_id}/close", response_model=MuniActionResult, dependencies=[Depends(auth.service_caller)])
