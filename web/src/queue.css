@@ -27,3 +27,14 @@
 .timeline { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; } .timeline li { display: flex; gap: 10px; font-size: 13px; } .timeline time { color: var(--pub-muted); min-width: 92px; }
 
 .view-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px 0; }
+
+.reply-link-body { display: grid; gap: 12px; }
+.field-inline { display: flex; align-items: center; gap: 8px; color: var(--tc-muted); font-size: 12px; }
+.field-inline select { min-height: 34px; padding: 0 9px; border: 1px solid var(--tc-border); border-radius: 8px; background: white; color: var(--tc-charcoal); font-size: 13px; }
+.reply-link-result { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.reply-link-result input { min-width: 0; min-height: 36px; padding: 0 10px; border: 1px solid var(--tc-border); border-radius: 8px; background: var(--tc-ivory); color: var(--tc-charcoal); font-size: 12px; }
+.reply-link-result small { grid-column: 1 / -1; color: var(--tc-muted); font-size: 12px; line-height: 1.45; }
+.citizen-photo-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.citizen-photo { display: grid; gap: 8px; }
+.citizen-photo strong, .citizen-photo small { display: block; } .citizen-photo small { color: var(--tc-muted); font-size: 12px; overflow-wrap: anywhere; }
+.citizen-photo img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 10px; }

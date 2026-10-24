@@ -1,7 +1,7 @@
 // The API surface the pages use. All network access goes through lib/http.ts.
 import { AGENT_BASE, ENGINE_BASE, request, streamSse } from "./lib/http";
 import type {
-  AdminUser, Approval, AuditEntry, CitySummary, Evidence, Me, ReplyInfo, Role, Score, Ticket, TicketWithScore,
+  AdminUser, Approval, AuditEntry, CitizenPhoto, CitySummary, Evidence, Me, ReplyInfo, Role, Score, Ticket, TicketWithScore,
   TraceEvent, VerificationRecord, WardDot, WardStat,
 } from "./types";
 
@@ -49,6 +49,12 @@ export const api = {
   audit: () => A<AuditEntry[]>("/audit"),
   auditVerify: () => A<{ ok: boolean; first_broken_idx: number | null; length: number }>("/audit/verify"),
   replyLink: (ticketId: string, lang: string) => A<{ token: string; expires_at: string }>("/citizen/reply-links", { method: "POST", body: { ticket_id: ticketId, lang } }),
+  ticketEvidence: (ticketId: string) => A<CitizenPhoto[]>(`/tickets/${encodeURIComponent(ticketId)}/evidence`),
+  /** A short-lived signed link to one stored citizen photo. A relative link is served by the Agent itself. */
+  evidenceUrl: async (evidenceId: string) => {
+    const r = await A<{ url: string; expires_in: number }>(`/evidence/${encodeURIComponent(evidenceId)}/url`);
+    return r.url.startsWith("/") ? `${AGENT_BASE}${r.url}` : r.url;
+  },
   replyInfo: (token: string) => A<ReplyInfo>(`/reply/${encodeURIComponent(token)}`, { auth: false }),
   reply: (token: string, answer: "yes" | "partly" | "no", lang: string) =>
     A<{ ok: boolean }>(`/reply/${encodeURIComponent(token)}`, { method: "POST", body: { answer, lang }, auth: false }),

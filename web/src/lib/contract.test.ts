@@ -19,7 +19,7 @@ const AGENT_CALLS: [string, string][] = [
   ["post", "/admin/users/{user_id}/tickets"], ["delete", "/admin/users/{user_id}/tickets/{ticket_id}"],
   ["get", "/verification/{ticket_id}/latest"], ["post", "/agent/run/{ticket_id}"], ["get", "/agent/stream/{run_id}"],
   ["get", "/approvals"], ["post", "/approvals/{approval_id}/decide"], ["get", "/audit"], ["get", "/audit/verify"],
-  ["post", "/citizen/reply-links"], ["get", "/reply/{token}"], ["post", "/reply/{token}"],
+  ["get", "/tickets/{ticket_id}/evidence"], ["get", "/evidence/{evidence_id}/url"], ["post", "/citizen/reply-links"], ["get", "/reply/{token}"], ["post", "/reply/{token}"],
 ];
 
 describe("web client against the exported OpenAPI specs", () => {

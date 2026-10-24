@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import BeforeAfter from "../components/BeforeAfter";
+import { CitizenPhotos, ReplyLinkPanel } from "../components/CitizenPanels";
 import Icon, { type IconName } from "../components/Icon";
 import { ErrorState, Skeleton } from "../components/States";
 import { useToast } from "../components/Toast";
@@ -180,6 +181,8 @@ export default function TicketDetail() {
 
         <aside className="detail-rail">
           <section className="app-card agent-card"><div className="app-card-header"><div><h2>Agent trace</h2><small className="header-caption">Budgeted, observable decisions</small></div><span className={`live-dot ${running ? "is-running" : ""}`}><span />{running ? "Running" : "Ready"}</span></div><div className="agent-card-body"><div className="budget-row"><span>Verification budget</span><strong>{last ? `${last.budget_left} / 10 left` : "10 / 10 left"}</strong></div><div className="budget-bar"><span style={{ width: `${((last?.budget_left ?? 10) / 10) * 100}%` }} /></div><button onClick={run} disabled={running}>{running ? "Collecting evidence…" : "Run verification agent"}</button>{events.length === 0 && <div className="trace-empty"><span className="trace-empty-icon"><Icon name="list" size={18} /></span><strong>No run started</strong><p>Start a run to see tool choice, evidence and posterior updates here.</p></div>}<ol className="trace">{events.map((event) => <li key={`${event.run_id}-${event.step}`}><span className={`trace-marker trace-${event.type}`} /> <div><strong>{event.tool ?? event.type.replace(/_/g, " ")}</strong><p>{event.summary}</p><small>{new Date(event.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {event.budget_left} budget left</small></div></li>)}</ol></div></section>
+          <ReplyLinkPanel ticketId={ticket.ticket_id} />
+          <CitizenPhotos ticketId={ticket.ticket_id} />
           <section className="app-card case-meta"><div className="app-card-header"><h2>Case metadata</h2></div><dl><div><dt>Category</dt><dd>{ticket.category}</dd></div><div><dt>Ward</dt><dd>{ticket.ward}</dd></div><div><dt>Created</dt><dd>{new Date(ticket.created_at).toLocaleDateString()}</dd></div><div><dt>Closed</dt><dd>{ticket.closed_at ? new Date(ticket.closed_at).toLocaleDateString() : "Not closed"}</dd></div><div><dt>Closure note</dt><dd>{ticket.closure_note ?? "None provided"}</dd></div></dl></section>
         </aside>
       </div>

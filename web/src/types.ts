@@ -42,6 +42,15 @@ export interface Score {
 }
 export interface TicketWithScore { ticket: Ticket; score: Score }
 
+/** A photo a citizen sent for review. Stored only; it carries no likelihood ratio. */
+export interface CitizenPhoto {
+  evidence_id: string;
+  sha256: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
 export interface Evidence {
   evidence_id: string;
   ticket_id: string;

@@ -1,6 +1,24 @@
 # TrueClose: next steps (backend, frontend, sign-in)
 
-Written 24 Oct. This is the checklist for the three prompts you pasted: the backend/DevOps prompt, the frontend prompt, and the 21st.dev sign-in component. Nothing here is built yet. Each item is a checkbox so it can be ticked off as it lands.
+Written 24 Oct, status updated 25 Oct. This is the checklist for the three prompts you pasted: the backend/DevOps prompt, the frontend prompt, and the 21st.dev sign-in component.
+
+**Status, 25 Oct.** Code for sections 3 to 5 is written on branch `feature/auth-and-deploy` (backend contract in `contract/AUTH_AND_DEPLOY.md`, web app in `web/`). Tests passed when last run (Agent 435, Engine 306, web 69 unit and 37 browser), but none of it has run against real Supabase, Postgres or Render yet. The checkboxes below are left as written; the ones that need an account or a deploy are listed in `DEPLOY_STEPS.md`.
+
+### Decisions you made (section 2)
+
+| # | Decision |
+|---|---|
+| 1 | Render for Engine and Agent. You create the account. |
+| 2 | No Postgres for the Engine (DuckDB and Parquet stay). Postgres for the Agent only. |
+| 3 | Supabase Auth. |
+| 4 | Public pages: one button only, no top-nav links. |
+| 5 | Plain CSS, no Tailwind. |
+| 6 | No social login for now. |
+| 7 | Citizens see only the tickets linked to them. No ticket creation. |
+| 8 | Officers are admin-approved. First admins are the four team members, set in `ADMIN_EMAILS`. |
+| 9 | Keep the full 10 s hero video, Gemini mark removed. |
+| 10 | Keep the current green palette. |
+| 11 | Defaults. |
 
 Rules that apply to all of it (from the prompts and from this project):
 - Small, reviewable commits on a feature branch. Do not rewrite the stack. Do not rename existing routes.
