@@ -1,5 +1,11 @@
 {
-  "version": 1,
-  "about": "Maps a ticket id to the photo shown on its card. Add one entry per photo and put the file next to this index. Only add a photo for the ticket it actually shows.",
-  "photos": {}
+  "version": 2,
+  "about": "Photos shown on complaint cards. `photos` maps a ticket id to a file (only for the ticket it actually shows). `categories` gives a synthetic stand-in image per complaint category for tickets whose source data has no photo; every such image is labelled as synthetic on the card.",
+  "photos": {},
+  "categories": {
+    "pothole": [{ "file": "synthetic-pothole-1.jpg", "alt": "Synthetic image of a water-filled pothole on a city road" }],
+    "garbage": [{ "file": "synthetic-garbage-1.jpg", "alt": "Synthetic image of overflowing garbage beside a roadside bin" }],
+    "streetlight": [{ "file": "synthetic-streetlight-1.jpg", "alt": "Synthetic image of a broken street light at dusk" }],
+    "drain": [{ "file": "synthetic-drain-1.jpg", "alt": "Synthetic image of a blocked roadside drain with stagnant water" }]
+  }
 }

@@ -29,7 +29,8 @@ export function riskPin(s: Score | undefined): Pin | undefined {
 /**
  * One complaint as a cutout card. Everything shown comes from the ticket record. The photo comes from `useTicketPhoto`:
  * the demo set's own "as reported" photo, or an entry in public/assets/ticket-photos/index.json. Real Bengaluru and
- * Mumbai tickets have no photo in the source data, so they get an honest "no photo" panel, never a stock image.
+ * Mumbai tickets have no photo in the source data: they show a synthetic stand-in for their category, labelled as such
+ * (or the honest "no photo" panel when the category has none).
  * `pin` overrides the status badge (the triage queue shows the risk signal there).
  */
 export default function ComplaintCard({ ticket, to, actionLabel = "Review evidence", note, showSummary = true, pin }: {
@@ -58,7 +59,7 @@ export default function ComplaintCard({ ticket, to, actionLabel = "Review eviden
         <p className="complaint-meta">{ticket.ward} · {ticket.city}{closed ? ` · closed ${closed}` : ""}</p>
       </CutoutContent>
       <CutoutFooter>
-        <span className={`badge ${synthetic ? "synthetic" : "real"}`}>{synthetic ? (shown ? "Demo photo, synthetic ticket" : "Synthetic ticket") : `${ticket.data_quality} record`}</span>
+        <span className={`badge ${synthetic ? "synthetic" : "real"}`}>{synthetic ? (shown ? "Demo photo, synthetic ticket" : "Synthetic ticket") : shown?.synthetic ? `${ticket.data_quality} record, synthetic image` : `${ticket.data_quality} record`}</span>
         {note && <span className="complaint-note">{note}</span>}
       </CutoutFooter>
       {to && <CutoutActions><Link className="btn btn-primary btn-sm complaint-link" to={to}>{actionLabel}</Link></CutoutActions>}
