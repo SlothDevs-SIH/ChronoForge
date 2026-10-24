@@ -1,0 +1,388 @@
+{
+  "model": "syn-truth-v1",
+  "score_type": "calibrated_probability",
+  "data_quality": "synthetic (ground truth by construction)",
+  "label": "ground-truth false closure in the synthetic generator",
+  "WARNING": "SYNTHETIC INJECTION: these numbers measure how well the model recovers failure modes we injected, nothing more.",
+  "splits": {
+    "train": "Pune, created before 2024-08-01 (3407 rows)",
+    "validation": "Pune, Aug-Sep 2024 (1038 rows)",
+    "test_same_city_later": "Pune, from 2024-10-01 (1227 rows)",
+    "test_unseen_city": "Sandbox City, all months (5628 rows)"
+  },
+  "shipped_model": "lgbm",
+  "validation_auroc": "validation AUROC: {'lgbm': 0.9842, 'logistic': 0.9707, 'ensemble': 0.9842}",
+  "train_base_rate": 0.2146,
+  "test_pune_later_months": {
+    "results": {
+      "baseline_category_rate": {
+        "n": 1227,
+        "positives": 259,
+        "base_rate": 0.21108,
+        "auroc": 0.5853,
+        "auroc_ci95": [
+          0.5482,
+          0.6157
+        ],
+        "pr_auc": 0.24844,
+        "brier": 0.163949,
+        "brier_skill_vs_train_rate": 0.0156,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 12,
+          "captured": 3.0,
+          "precision": 0.25,
+          "recall": 0.011583011583011582,
+          "lift": 1.1843629343629343
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 122,
+          "captured": 31.0,
+          "precision": 0.2540983606557377,
+          "recall": 0.11969111969111969,
+          "lift": 1.2037787201721628
+        }
+      },
+      "lgbm": {
+        "n": 1227,
+        "positives": 259,
+        "base_rate": 0.21108,
+        "auroc": 0.9831,
+        "auroc_ci95": [
+          0.9769,
+          0.9896
+        ],
+        "pr_auc": 0.9543,
+        "brier": 0.037703,
+        "brier_skill_vs_train_rate": 0.7736,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 12,
+          "captured": 12.0,
+          "precision": 1.0,
+          "recall": 0.04633204633204633,
+          "lift": 4.737451737451737
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 122,
+          "captured": 122.0,
+          "precision": 1.0,
+          "recall": 0.47104247104247104,
+          "lift": 4.737451737451737
+        }
+      },
+      "logistic": {
+        "n": 1227,
+        "positives": 259,
+        "base_rate": 0.21108,
+        "auroc": 0.9638,
+        "auroc_ci95": [
+          0.9504,
+          0.9756
+        ],
+        "pr_auc": 0.9201,
+        "brier": 0.049044,
+        "brier_skill_vs_train_rate": 0.7055,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 12,
+          "captured": 12.0,
+          "precision": 1.0,
+          "recall": 0.04633204633204633,
+          "lift": 4.737451737451737
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 122,
+          "captured": 121.0,
+          "precision": 0.9918032786885246,
+          "recall": 0.4671814671814672,
+          "lift": 4.6986201658332805
+        }
+      },
+      "ensemble_raw": {
+        "n": 1227,
+        "positives": 259,
+        "base_rate": 0.21108,
+        "auroc": 0.9831,
+        "auroc_ci95": [
+          0.9769,
+          0.9896
+        ],
+        "pr_auc": 0.9543,
+        "brier": 0.037703,
+        "brier_skill_vs_train_rate": 0.7736,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 12,
+          "captured": 12.0,
+          "precision": 1.0,
+          "recall": 0.04633204633204633,
+          "lift": 4.737451737451737
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 122,
+          "captured": 122.0,
+          "precision": 1.0,
+          "recall": 0.47104247104247104,
+          "lift": 4.737451737451737
+        }
+      },
+      "SHIPPED(lgbm)": {
+        "n": 1227,
+        "positives": 259,
+        "base_rate": 0.21108,
+        "auroc": 0.9815,
+        "auroc_ci95": [
+          0.9745,
+          0.9883
+        ],
+        "pr_auc": 0.93676,
+        "brier": 0.038529,
+        "brier_skill_vs_train_rate": 0.7687,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 12,
+          "captured": 12.0,
+          "precision": 1.0,
+          "recall": 0.04633204633204633,
+          "lift": 4.737451737451737
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 122,
+          "captured": 122.0,
+          "precision": 1.0,
+          "recall": 0.47104247104247104,
+          "lift": 4.737451737451737
+        }
+      }
+    },
+    "reliability_shipped": [
+      {
+        "predicted": 1e-05,
+        "observed": 0.0,
+        "n": 663
+      },
+      {
+        "predicted": 0.0137,
+        "observed": 0.05495,
+        "n": 91
+      },
+      {
+        "predicted": 0.07423,
+        "observed": 0.09836,
+        "n": 183
+      },
+      {
+        "predicted": 0.81583,
+        "observed": 0.81379,
+        "n": 290
+      },
+      {
+        "predicted": 0.99999,
+        "observed": 0.99441,
+        "n": 179
+      }
+    ]
+  },
+  "test_sandbox_unseen_city": {
+    "results": {
+      "baseline_category_rate": {
+        "n": 5628,
+        "positives": 1175,
+        "base_rate": 0.20878,
+        "auroc": 0.6026,
+        "auroc_ci95": [
+          0.5859,
+          0.6182
+        ],
+        "pr_auc": 0.25567,
+        "brier": 0.161771,
+        "brier_skill_vs_train_rate": 0.0209,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 56,
+          "captured": 22.0,
+          "precision": 0.39285714285714285,
+          "recall": 0.01872340425531915,
+          "lift": 1.8817021276595745
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 562,
+          "captured": 147.0,
+          "precision": 0.2615658362989324,
+          "recall": 0.1251063829787234,
+          "lift": 1.2528447035662906
+        }
+      },
+      "lgbm": {
+        "n": 5628,
+        "positives": 1175,
+        "base_rate": 0.20878,
+        "auroc": 0.9825,
+        "auroc_ci95": [
+          0.979,
+          0.9855
+        ],
+        "pr_auc": 0.95184,
+        "brier": 0.038034,
+        "brier_skill_vs_train_rate": 0.7698,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 56,
+          "captured": 56.0,
+          "precision": 1.0,
+          "recall": 0.04765957446808511,
+          "lift": 4.789787234042553
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 562,
+          "captured": 562.0,
+          "precision": 1.0,
+          "recall": 0.47829787234042553,
+          "lift": 4.789787234042553
+        }
+      },
+      "logistic": {
+        "n": 5628,
+        "positives": 1175,
+        "base_rate": 0.20878,
+        "auroc": 0.9604,
+        "auroc_ci95": [
+          0.9535,
+          0.9668
+        ],
+        "pr_auc": 0.9151,
+        "brier": 0.050984,
+        "brier_skill_vs_train_rate": 0.6914,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 56,
+          "captured": 56.0,
+          "precision": 1.0,
+          "recall": 0.04765957446808511,
+          "lift": 4.789787234042553
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 562,
+          "captured": 561.0,
+          "precision": 0.998220640569395,
+          "recall": 0.4774468085106383,
+          "lift": 4.781264480957068
+        }
+      },
+      "ensemble_raw": {
+        "n": 5628,
+        "positives": 1175,
+        "base_rate": 0.20878,
+        "auroc": 0.9825,
+        "auroc_ci95": [
+          0.979,
+          0.9855
+        ],
+        "pr_auc": 0.95184,
+        "brier": 0.038034,
+        "brier_skill_vs_train_rate": 0.7698,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 56,
+          "captured": 56.0,
+          "precision": 1.0,
+          "recall": 0.04765957446808511,
+          "lift": 4.789787234042553
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 562,
+          "captured": 562.0,
+          "precision": 1.0,
+          "recall": 0.47829787234042553,
+          "lift": 4.789787234042553
+        }
+      },
+      "SHIPPED(lgbm)": {
+        "n": 5628,
+        "positives": 1175,
+        "base_rate": 0.20878,
+        "auroc": 0.9809,
+        "auroc_ci95": [
+          0.9775,
+          0.984
+        ],
+        "pr_auc": 0.93232,
+        "brier": 0.040034,
+        "brier_skill_vs_train_rate": 0.7577,
+        "lift_top1pct": {
+          "frac": 0.01,
+          "n": 56,
+          "captured": 55.0,
+          "precision": 0.9821428571428571,
+          "recall": 0.04680851063829787,
+          "lift": 4.704255319148936
+        },
+        "lift_top10pct": {
+          "frac": 0.1,
+          "n": 562,
+          "captured": 557.0,
+          "precision": 0.9911032028469751,
+          "recall": 0.47404255319148936,
+          "lift": 4.747173468615128
+        }
+      }
+    },
+    "reliability_shipped": [
+      {
+        "predicted": 1e-05,
+        "observed": 0.0,
+        "n": 3041
+      },
+      {
+        "predicted": 0.0137,
+        "observed": 0.04494,
+        "n": 445
+      },
+      {
+        "predicted": 0.07563,
+        "observed": 0.11606,
+        "n": 853
+      },
+      {
+        "predicted": 0.81351,
+        "observed": 0.81924,
+        "n": 1289
+      },
+      {
+        "predicted": 0.99999,
+        "observed": 0.99105,
+        "n": 782
+      }
+    ]
+  },
+  "feature_importance_lgbm_gain": {
+    "log_res_hours": 7842.5490727419965,
+    "note_len": 7817.429616574198,
+    "note_blank": 5872.163730844855,
+    "exif_dist_m": 4536.092914657202,
+    "photo_seen_before": 1812.8236709535122,
+    "closed_hour": 1478.970591169782,
+    "officer_cnt_30d": 430.73946134897415,
+    "ward_cat_30d": 225.299863550812,
+    "category": 187.99493062496185,
+    "lang": 180.08659983798862,
+    "cell_cat_14d": 7.526781052350998,
+    "officer_minute_cnt": 0.0
+  },
+  "prior_clip": "p_false_closure is clipped to [0.02, 0.98] so the agent's evidence can still move a verdict",
+  "caveats": [
+    "Everything here is synthetic. The false-closure rate (about 21%) and the failure modes are invented by us.",
+    "Probabilities are calibrated for the synthetic world only; they say nothing about real cities."
+  ],
+  "seconds": 3.9
+}

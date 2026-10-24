@@ -1,0 +1,271 @@
+{
+  "model": "blr-reopen-v1",
+  "score_type": "risk_rank_prior",
+  "data_quality": "real (proxy label)",
+  "label": "citizen reopened the closure (status ReOpen); tickets created Oct 2024 onward",
+  "splits": {
+    "train": "created before 2025-03-01 (90084 rows, 1306 reopened)",
+    "validation": "2025-03-01 to 2025-04-30 (39528 rows, 357 reopened)",
+    "test": "2025-05-01 onward (37890 rows, 639 reopened)"
+  },
+  "shipped_model": "lgbm",
+  "selection_rule": "best validation AUROC, fixed before looking at the test slice",
+  "validation_auroc": "validation AUROC: {'lgbm': 0.7367, 'logistic': 0.7343, 'ensemble': 0.7362}",
+  "ensemble_weight_lgbm": 0.6000000000000001,
+  "train_base_rate": 0.0145,
+  "results_on_test": {
+    "baseline_constant_train_rate": {
+      "n": 37890,
+      "positives": 639,
+      "base_rate": 0.01686,
+      "auroc": 0.5,
+      "auroc_ci95": [
+        0.5,
+        0.5
+      ],
+      "pr_auc": 0.01686,
+      "brier": 0.016586,
+      "brier_skill_vs_train_rate": 0.0,
+      "lift_top1pct": {
+        "frac": 0.01,
+        "n": 378,
+        "captured": 7.0,
+        "precision": 0.018518518518518517,
+        "recall": 0.010954616588419406,
+        "lift": 1.0980699008868022
+      },
+      "lift_top10pct": {
+        "frac": 0.1,
+        "n": 3789,
+        "captured": 73.0,
+        "precision": 0.019266297176035892,
+        "recall": 0.11424100156494522,
+        "lift": 1.1424100156494523
+      }
+    },
+    "baseline_category_rate": {
+      "n": 37890,
+      "positives": 639,
+      "base_rate": 0.01686,
+      "auroc": 0.6103,
+      "auroc_ci95": [
+        0.5847,
+        0.6337
+      ],
+      "pr_auc": 0.03147,
+      "brier": 0.016454,
+      "brier_skill_vs_train_rate": 0.008,
+      "lift_top1pct": {
+        "frac": 0.01,
+        "n": 378,
+        "captured": 36.0,
+        "precision": 0.09523809523809523,
+        "recall": 0.056338028169014086,
+        "lift": 5.647216633132126
+      },
+      "lift_top10pct": {
+        "frac": 0.1,
+        "n": 3789,
+        "captured": 173.0,
+        "precision": 0.04565848508841383,
+        "recall": 0.27073552425665104,
+        "lift": 2.70735524256651
+      }
+    },
+    "baseline_subcategory_rate": {
+      "n": 37890,
+      "positives": 639,
+      "base_rate": 0.01686,
+      "auroc": 0.6034,
+      "auroc_ci95": [
+        0.5791,
+        0.6274
+      ],
+      "pr_auc": 0.03885,
+      "brier": 0.016434,
+      "brier_skill_vs_train_rate": 0.0092,
+      "lift_top1pct": {
+        "frac": 0.01,
+        "n": 378,
+        "captured": 36.0,
+        "precision": 0.09523809523809523,
+        "recall": 0.056338028169014086,
+        "lift": 5.647216633132126
+      },
+      "lift_top10pct": {
+        "frac": 0.1,
+        "n": 3789,
+        "captured": 187.0,
+        "precision": 0.049353391396146744,
+        "recall": 0.29264475743348983,
+        "lift": 2.9264475743348988
+      }
+    },
+    "baseline_ward_lagged_rate": {
+      "n": 37890,
+      "positives": 639,
+      "base_rate": 0.01686,
+      "auroc": 0.5578,
+      "auroc_ci95": [
+        0.5352,
+        0.5848
+      ],
+      "pr_auc": 0.02371,
+      "brier": 0.016584,
+      "brier_skill_vs_train_rate": 0.0001,
+      "lift_top1pct": {
+        "frac": 0.01,
+        "n": 378,
+        "captured": 10.0,
+        "precision": 0.026455026455026454,
+        "recall": 0.01564945226917058,
+        "lift": 1.568671286981146
+      },
+      "lift_top10pct": {
+        "frac": 0.1,
+        "n": 3789,
+        "captured": 120.0,
+        "precision": 0.03167062549485352,
+        "recall": 0.18779342723004694,
+        "lift": 1.8779342723004693
+      }
+    },
+    "lgbm": {
+      "n": 37890,
+      "positives": 639,
+      "base_rate": 0.01686,
+      "auroc": 0.5956,
+      "auroc_ci95": [
+        0.5715,
+        0.6208
+      ],
+      "pr_auc": 0.04611,
+      "brier": 0.016386,
+      "brier_skill_vs_train_rate": 0.012,
+      "lift_top1pct": {
+        "frac": 0.01,
+        "n": 378,
+        "captured": 42.0,
+        "precision": 0.1111111111111111,
+        "recall": 0.06572769953051644,
+        "lift": 6.588419405320813
+      },
+      "lift_top10pct": {
+        "frac": 0.1,
+        "n": 3789,
+        "captured": 194.0,
+        "precision": 0.0512008445500132,
+        "recall": 0.30359937402190923,
+        "lift": 3.0359937402190926
+      }
+    },
+    "logistic": {
+      "n": 37890,
+      "positives": 639,
+      "base_rate": 0.01686,
+      "auroc": 0.6431,
+      "auroc_ci95": [
+        0.6227,
+        0.6673
+      ],
+      "pr_auc": 0.04925,
+      "brier": 0.016378,
+      "brier_skill_vs_train_rate": 0.0125,
+      "lift_top1pct": {
+        "frac": 0.01,
+        "n": 378,
+        "captured": 47.0,
+        "precision": 0.12433862433862433,
+        "recall": 0.07355242566510173,
+        "lift": 7.372755048811387
+      },
+      "lift_top10pct": {
+        "frac": 0.1,
+        "n": 3789,
+        "captured": 209.0,
+        "precision": 0.055159672736869884,
+        "recall": 0.3270735524256651,
+        "lift": 3.270735524256651
+      }
+    },
+    "ensemble_raw": {
+      "n": 37890,
+      "positives": 639,
+      "base_rate": 0.01686,
+      "auroc": 0.6138,
+      "auroc_ci95": [
+        0.5902,
+        0.6384
+      ],
+      "pr_auc": 0.04889,
+      "brier": 0.016363,
+      "brier_skill_vs_train_rate": 0.0135,
+      "lift_top1pct": {
+        "frac": 0.01,
+        "n": 378,
+        "captured": 45.0,
+        "precision": 0.11904761904761904,
+        "recall": 0.07042253521126761,
+        "lift": 7.059020791415158
+      },
+      "lift_top10pct": {
+        "frac": 0.1,
+        "n": 3789,
+        "captured": 207.0,
+        "precision": 0.05463182897862233,
+        "recall": 0.323943661971831,
+        "lift": 3.23943661971831
+      }
+    },
+    "SHIPPED(lgbm)": {
+      "n": 37890,
+      "positives": 639,
+      "base_rate": 0.01686,
+      "auroc": 0.5956,
+      "auroc_ci95": [
+        0.5715,
+        0.6208
+      ],
+      "pr_auc": 0.04611,
+      "brier": 0.016386,
+      "brier_skill_vs_train_rate": 0.012,
+      "lift_top1pct": {
+        "frac": 0.01,
+        "n": 378,
+        "captured": 42.0,
+        "precision": 0.1111111111111111,
+        "recall": 0.06572769953051644,
+        "lift": 6.588419405320813
+      },
+      "lift_top10pct": {
+        "frac": 0.1,
+        "n": 3789,
+        "captured": 194.0,
+        "precision": 0.0512008445500132,
+        "recall": 0.30359937402190923,
+        "lift": 3.0359937402190926
+      }
+    }
+  },
+  "feature_importance_lgbm_gain": {
+    "sub": 7663.767261981964,
+    "sub_rate_lag30": 3951.3717291355133,
+    "ward_zone": 2552.3462805747986,
+    "ward_rate_lag30": 2410.181101322174,
+    "ward_cnt_30d": 2368.7443673610687,
+    "ward_sub_90d": 1652.8388900756836,
+    "ward_sub_14d": 834.6419596672058,
+    "category": 677.6281359195709,
+    "hour": 660.8167197704315,
+    "dow": 540.1422085762024
+  },
+  "prior_mapping": "p_false_closure = 0.3 + 0.4 x risk percentile, so real-city priors stay in [0.30, 0.70]; NOT a calibrated probability",
+  "caveats": [
+    "The label is 'citizen reopened', a lower bound on false closure: it needs a persistent citizen and a department with a reopen workflow.",
+    "Remark AND staff features are excluded: a reopened ticket gets a new remark and a senior handler, so both leak the label (a staff-role lookup alone scored AUROC 0.965).",
+    "The reopen process drifts month to month: validation AUROC was far higher than test AUROC. Expect roughly the test figures, not the validation ones.",
+    "This is a RANK score, not a probability: isotonic calibration on one slice made the next slice much worse (Brier skill -1.49), so none is applied.",
+    "Ward-level only: no exact location or closing time exists for Bengaluru."
+  ],
+  "seconds": 16.1
+}
