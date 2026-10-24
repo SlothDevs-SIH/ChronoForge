@@ -1,6 +1,6 @@
 # Backend A: Engine service (Soham)
 
-Port 8001. Python 3.11, FastAPI. Read `00_contract_and_timeline.md` first.
+Port 8001. Python 3.11, FastAPI. Read `contract/README.md` first.
 Decision points marked **[Qn]** are in `questions.md`. Where I state a lean, it is a recommendation and not a lock.
 
 ## 1. What this service is

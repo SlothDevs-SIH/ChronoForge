@@ -1,0 +1,15 @@
+{
+  "note": "PLACEHOLDER fixture values. Not real results. Replace with benchmark output; label synthetic injection on the eval page.",
+  "is_placeholder": true,
+  "scorer": [
+    {"model": "category_base_rate", "auroc": 0.5, "pr_auc": 0.3, "brier": 0.21},
+    {"model": "logistic", "auroc": 0.0, "pr_auc": 0.0, "brier": 0.0},
+    {"model": "lightgbm", "auroc": 0.0, "pr_auc": 0.0, "brier": 0.0},
+    {"model": "ensemble", "auroc": 0.0, "pr_auc": 0.0, "brier": 0.0}
+  ],
+  "reliability_curve": [{"predicted": 0.1, "observed": 0.0}, {"predicted": 0.5, "observed": 0.0}, {"predicted": 0.9, "observed": 0.0}],
+  "verifiers": [
+    {"check": "photo", "precision": 0.0, "recall": 0.0, "abstention_rate": 0.0, "coverage": 0.0},
+    {"check": "satellite", "precision": 0.0, "recall": 0.0, "abstention_rate": 0.0, "coverage": 0.0}
+  ]
+}

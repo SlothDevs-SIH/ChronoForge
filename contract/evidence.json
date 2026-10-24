@@ -1,0 +1,28 @@
+{
+  "photo": {
+    "evidence_id": "00000000-0000-4000-8000-000000000001", "ticket_id": "blr-0001", "check": "photo",
+    "verdict": "contradicts_fix", "likelihood_ratio": 8.0, "confidence": 0.9, "cost": 1,
+    "details": {"phash_match_ticket": "syn-0001", "hamming": 2, "clip_scene": "pothole still visible", "exif_distance_m": 4200},
+    "created_at": "2024-03-04T07:00:00Z"
+  },
+  "satellite": {
+    "evidence_id": "00000000-0000-4000-8000-000000000002", "ticket_id": "blr-0002", "check": "satellite",
+    "verdict": "contradicts_fix", "likelihood_ratio": 3.0, "confidence": 0.7, "cost": 3,
+    "details": {"source": "cached", "cloud_pct": 8, "dNDVI": 0.01, "z_score": 0.2, "eligible": true,
+                "before_scene": "S2B_fixture_before", "after_scene": "S2B_fixture_after",
+                "chip_before_url": "demo/sat/blr-0002-before.png", "chip_after_url": "demo/sat/blr-0002-after.png"},
+    "created_at": "2024-03-04T07:01:00Z"
+  },
+  "citizen": {
+    "evidence_id": "00000000-0000-4000-8000-000000000003", "ticket_id": "blr-0001", "check": "citizen",
+    "verdict": "contradicts_fix", "likelihood_ratio": 6.0, "confidence": 0.8, "cost": 2,
+    "details": {"channel": "telegram", "reply": "2", "intent": "no", "lang": "en"},
+    "created_at": "2024-03-04T07:05:00Z"
+  },
+  "satellite_ineligible": {
+    "evidence_id": "00000000-0000-4000-8000-000000000004", "ticket_id": "blr-0001", "check": "satellite",
+    "verdict": "inconclusive", "likelihood_ratio": 1.0, "confidence": 0.0, "cost": 0,
+    "details": {"eligible": false, "reason": "pothole is below Sentinel-2 10 m resolution; skipped"},
+    "created_at": "2024-03-04T07:01:00Z"
+  }
+}

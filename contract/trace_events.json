@@ -1,0 +1,8 @@
+[
+  {"run_id": "fixture-run", "step": 1, "type": "tool_call", "tool": "get_score", "summary": "Prior false-closure probability 0.82", "cost_spent": 0, "budget_left": 10, "ts": "2024-03-04T07:00:00Z"},
+  {"run_id": "fixture-run", "step": 2, "type": "tool_call", "tool": "check_photo", "summary": "Closure photo matches photo on syn-0001 (hamming 2)", "cost_spent": 1, "budget_left": 9, "ts": "2024-03-04T07:00:01Z"},
+  {"run_id": "fixture-run", "step": 3, "type": "tool_result", "tool": "check_satellite", "summary": "Skipped: pothole is below satellite resolution (cost 0)", "cost_spent": 1, "budget_left": 9, "ts": "2024-03-04T07:00:02Z"},
+  {"run_id": "fixture-run", "step": 4, "type": "tool_call", "tool": "ask_citizen", "summary": "Complainant replied: not fixed", "cost_spent": 3, "budget_left": 7, "ts": "2024-03-04T07:05:00Z"},
+  {"run_id": "fixture-run", "step": 5, "type": "verdict", "tool": null, "summary": "likely_not_fixed, posterior 0.99", "cost_spent": 3, "budget_left": 7, "ts": "2024-03-04T07:05:01Z"},
+  {"run_id": "fixture-run", "step": 6, "type": "approval_needed", "tool": "propose_action", "summary": "Reopen proposed; waiting for human approval", "cost_spent": 3, "budget_left": 7, "ts": "2024-03-04T07:05:02Z"}
+]

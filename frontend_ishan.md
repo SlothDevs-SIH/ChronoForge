@@ -1,6 +1,6 @@
 # Frontend (Ishan)
 
-Read `00_contract_and_timeline.md` first. Decision points marked **[Qn]** are in `questions.md`.
+Read `contract/README.md` first. Decision points marked **[Qn]** are in `questions.md`.
 
 ## 1. Job to be done
 

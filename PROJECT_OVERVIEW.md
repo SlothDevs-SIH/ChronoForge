@@ -178,4 +178,4 @@ Open: colour palette; deck tooling and the citizen survey (Vedashree).
 
 ## 15. Where to read more
 
-`00_contract_and_timeline.md` (data contracts, timeline), `backend_soham.md`, `backend_ayush.md`, `frontend_ishan.md`, `research_vedashri.md` (Vedashree's task list, Q&A cheat sheet and reading list).
+`contract/README.md` (endpoints, fusion rule, rules), `backend_soham.md`, `backend_ayush.md`, `frontend_ishan.md`, `research_vedashri.md` (Vedashree's task list, Q&A cheat sheet and reading list).
