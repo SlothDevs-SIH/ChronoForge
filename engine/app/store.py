@@ -77,6 +77,7 @@ class WarehouseStore:
         self._lock = threading.Lock()
         self._con = duckdb.connect()
         self._con.execute("create table status_overrides (ticket_id varchar primary key, status varchar)")
+        self._load_overrides()
         self._build()
         self.eval_results = _eval_payload()
 
@@ -154,11 +155,27 @@ class WarehouseStore:
         t = self.get_ticket(ticket_id)
         return Evidence(**verifier.check_ticket(t.model_dump(), cached_only=cached_only, refresh=refresh))
 
+    def _overrides_path(self) -> Path:
+        return self._dir / "status_overrides.json"
+
+    def _load_overrides(self) -> None:
+        """The simulated municipal system must remember reopens across an Engine restart."""
+        try:
+            saved = json.loads(self._overrides_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        for tid, status in saved.items():
+            self._con.execute("insert or replace into status_overrides values (?, ?)", [tid, status])
+
     def set_status(self, ticket_id: str, status: str) -> None:
         with self._lock:
             cur = self._con.cursor()
             cur.execute("delete from status_overrides where ticket_id = ?", [ticket_id])
             cur.execute("insert into status_overrides values (?, ?)", [ticket_id, status])
+            saved = dict(cur.execute("select ticket_id, status from status_overrides").fetchall())
+        tmp = self._overrides_path().with_suffix(".tmp")
+        tmp.write_text(json.dumps(saved), encoding="utf-8")
+        tmp.replace(self._overrides_path())
 
     def muni_tickets(self, limit: int) -> list[Ticket]:
         return [x.ticket for x in self.list_tickets(limit=limit)]

@@ -5,16 +5,28 @@ falls back to the contract fixtures. GET /health says which mode is active.
 
 Run: uvicorn app.main:app --port 8001 --reload   (from engine/)
 """
+import os
 import re
+import threading
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .models import Evidence, MuniActionResult, SatelliteCheckRequest, Score, Ticket, TicketWithScore
 from .store import store
+
+_sync_lock = threading.Lock()
+
+
+def require_admin(x_admin_token: Optional[str] = Header(default=None)) -> None:
+    """Optional shared secret (ENGINE_ADMIN_TOKEN) for the heavy admin endpoints. Unset = open (laptop demo only)."""
+    token = os.environ.get("ENGINE_ADMIN_TOKEN", "")
+    if token and x_admin_token != token:
+        raise HTTPException(403, "admin token required")
+
 
 app = FastAPI(title="TrueClose Engine", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -44,7 +56,7 @@ def list_tickets(
     ward: Optional[str] = None,
     category: Optional[str] = None,
     status: Optional[str] = None,
-    min_score: float = 0.0,
+    min_score: float = Query(0.0, ge=0.0, le=1.0),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     sort: Literal["newest", "risk"] = "newest",
@@ -116,16 +128,21 @@ def eval_results() -> dict:
     return store.eval_results
 
 
-@app.post("/connectors/{name}/sync")
+@app.post("/connectors/{name}/sync", dependencies=[Depends(require_admin)])
 def connector_sync(name: str) -> dict:
     """Re-run a connector (mumbai | bengaluru | pune | synthetic) and reload the store. Takes 10 to 30 seconds."""
     from .ingest import SOURCES, ingest  # imported lazily: pulls in pandas
 
     if name not in SOURCES:
         raise HTTPException(404, f"unknown connector {name!r}; choose from {sorted(SOURCES)}")
-    src = SOURCES[name]()
-    df = ingest(src)
-    store.reload()
+    if not _sync_lock.acquire(blocking=False):   # two syncs at once would race on the same Parquet files
+        raise HTTPException(409, "a sync is already running; try again in a minute")
+    try:
+        src = SOURCES[name]()
+        df = ingest(src)
+        store.reload()
+    finally:
+        _sync_lock.release()
     return {"connector": name, "synced": len(df), "report": dict(src.report), "mode": store.mode,
             "note": "restart the service to switch from fixtures to the warehouse" if store.mode == "fixtures" else None}
 
@@ -138,7 +155,9 @@ def muni_tickets(limit: int = Query(100, ge=1, le=1000)) -> list[Ticket]:
 
 @app.post("/muni/tickets/{ticket_id}/reopen", response_model=MuniActionResult)
 def muni_reopen(ticket_id: str) -> MuniActionResult:
-    _ticket(ticket_id)
+    t = _ticket(ticket_id)
+    if t.status != "closed":   # only a closed ticket can be reopened; an open or already reopened one cannot
+        raise HTTPException(409, f"ticket {ticket_id} is {t.status}; only a closed ticket can be reopened")
     store.set_status(ticket_id, "reopened")
     return MuniActionResult(ticket_id=ticket_id, status="reopened", note="simulated municipal system")
 
