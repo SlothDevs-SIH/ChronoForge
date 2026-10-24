@@ -137,6 +137,11 @@ def handle_update(update: dict, fallback: Callable[[str], str | None] | None = N
         return None
     text = (msg.get("text") or msg.get("caption") or "").strip()
     command = text.lower().split("@")[0]
+    if command.startswith("/start ") and len(text.split()) == 2:   # deep link from the website: /start <one-time token>
+        from . import cases
+        if cases.claim_link(text.split()[1], chat_id) is None:
+            _notify("telegram", chat_id, cases.BAD_LINK)
+        return None
     if command in ("/start", "/help"):
         _notify("telegram", chat_id, citizen.ack_text(_lang_for(chat_id), "help" if command == "/help" else "idle"))
         return None

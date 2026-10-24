@@ -3,7 +3,7 @@ from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel
 
-City = Literal["bengaluru", "pune", "mumbai", "synthetic", "demo"]
+City = Literal["bengaluru", "pune", "mumbai", "synthetic", "demo", "web"]
 Category = Literal["pothole", "garbage", "streetlight", "drain", "water_leak", "other"]
 
 
@@ -75,6 +75,20 @@ class SatelliteCheckRequest(BaseModel):
     ticket_id: str
     cached_only: bool = False   # never read live imagery; answer from the cache or abstain (instant)
     refresh: bool = False       # ignore the cache and measure again
+
+
+class NewRequest(BaseModel):
+    """A complaint filed through the TrueClose website. Becomes a ticket in the "web" city, status open."""
+    category: Category
+    text: str
+    ward: str = "unspecified"
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    lang: str = "en"
+
+
+class CloseRequest(BaseModel):
+    note: str = "closed by the simulated municipal system"
 
 
 class MuniActionResult(BaseModel):

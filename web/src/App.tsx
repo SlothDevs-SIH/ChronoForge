@@ -17,7 +17,7 @@ import ConnectionBadge from "./components/ConnectionBadge";
 import { Brand } from "./components/PublicNav";
 
 const STAFF: Role[] = ["officer", "admin"];
-const CITIES = ["bengaluru", "pune", "mumbai", "synthetic", "demo"];
+const CITIES = ["bengaluru", "pune", "mumbai", "synthetic", "demo", "web"];
 
 function AppShell() {
   const [params, setParams] = useSearchParams();

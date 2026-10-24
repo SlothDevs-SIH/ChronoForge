@@ -11,7 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from pydantic import BaseModel
 
-from . import agent, approvals, audit, auth, config, llm, llm_planner, telegram, tools, whatsapp
+from . import agent, approvals, audit, auth, cases, config, llm, llm_planner, telegram, tools, whatsapp
 from .db import get_conn, lock
 from .models import DecideRequest, PhotoRequest
 from .photo import PhotoIndex, check_ref_allowed, verify_photo
@@ -326,3 +326,45 @@ def add_my_ticket(req: TicketRef, user=Depends(auth.require_role("citizen"))):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     return auth.my_tickets(user["user_id"])
+
+
+class NewCase(BaseModel):
+    category: str
+    text: str
+    ward: str = "unspecified"
+    lat: float | None = None
+    lng: float | None = None
+
+
+@app.on_event("startup")
+def start_case_watcher():
+    cases.start_watcher()
+
+
+@app.post("/me/requests")
+def submit_request(req: NewCase, user=Depends(auth.require_role("citizen"))):
+    """A citizen files a request on the website. Returns the ticket and a one-time link that connects Telegram."""
+    try:
+        return cases.submit(user["user_id"], req.category, req.text, req.ward, req.lat, req.lng)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except ConnectionError as exc:
+        raise HTTPException(503, str(exc))
+
+
+@app.post("/me/requests/{ticket_id}/telegram-link")
+def telegram_link(ticket_id: str, user=Depends(auth.require_role("citizen"))):
+    if ticket_id not in auth.my_tickets(user["user_id"]):
+        raise HTTPException(404, "unknown request")
+    return cases.new_link(ticket_id)
+
+
+@app.post("/admin/requests/{ticket_id}/close")
+def admin_close_request(ticket_id: str, _=Depends(auth.require_role("admin"))):
+    """Demo: stand in for the city closing a website request, which the watcher then picks up."""
+    try:
+        return cases.close_for_demo(ticket_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    except Exception:
+        raise HTTPException(503, "the Engine is not reachable")

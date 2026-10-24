@@ -64,3 +64,7 @@ AUTH_ENFORCE = os.getenv("AGENT_AUTH_ENFORCE", "1") == "1"   # 0 = open API, for
 AUTH_TOKEN_HOURS = int(os.getenv("AGENT_AUTH_TOKEN_HOURS", "12"))
 FIRST_ADMIN_EMAIL = os.getenv("AGENT_FIRST_ADMIN_EMAIL", "")      # seeds one admin at startup if no admin exists
 FIRST_ADMIN_PASSWORD = os.getenv("AGENT_FIRST_ADMIN_PASSWORD", "")
+
+# Case tracking: how often (seconds) the watcher looks for tracked tickets the city has closed. 0 = off.
+WATCH_INTERVAL = float(os.getenv("AGENT_WATCH_INTERVAL", "15"))
+ENGINE_ADMIN_TOKEN = os.getenv("ENGINE_ADMIN_TOKEN", "")   # sent to the Engine when it is protected with one

@@ -1,5 +1,5 @@
 // Mirrors the JSON contract in /contract. Keep in sync with contract/README.md.
-export type City = "bengaluru" | "pune" | "mumbai" | "synthetic" | "demo";
+export type City = "bengaluru" | "pune" | "mumbai" | "synthetic" | "demo" | "web";
 
 export interface Ticket {
   ticket_id: string;

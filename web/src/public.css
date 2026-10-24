@@ -260,3 +260,9 @@ code, pre { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
   .toast-region { right: 12px; left: 12px; width: auto; }
 }
 html, body { overflow-x: hidden; }
+
+/* Citizen request form */
+.add-ticket select, .add-ticket textarea { width: 100%; min-height: 48px; padding: 10px 14px; border: 1.5px solid var(--tc-border); border-radius: var(--tc-radius-control); background: #fff; font: 16px var(--font-body); }
+.add-ticket .btn { justify-self: start; }
+.form-title { margin: 0 0 4px; font-size: 18px; }
+.success-card { border-color: var(--tc-success); background: #f3faf5; } .success-card p { margin: 0; }

@@ -15,6 +15,12 @@ export default function Admin() {
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["users"] }); toast("success", "Account updated."); },
     onError: (e) => toast("error", e instanceof Error ? e.message : "Could not update the account."),
   });
+  const web = useQuery({ queryKey: ["web-requests"], queryFn: () => api.tickets("web", undefined, 50, "newest"), refetchInterval: 5000 });
+  const close = useMutation({
+    mutationFn: api.closeRequest,
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["web-requests"] }); toast("success", "Marked closed. The case watcher will check it within seconds."); },
+    onError: (e) => toast("error", e instanceof Error ? e.message : "Could not close the request."),
+  });
   const rows = users.data ?? [];
   const pending = rows.filter((u) => u.status === "pending");
   const up = (q: { data?: { ok: boolean }; isLoading: boolean }) => (q.data?.ok ? "Up" : q.isLoading ? "…" : "Down");
@@ -28,6 +34,16 @@ export default function Admin() {
         <div className="metric-card"><span>Engine service</span><strong>{up(engine)}</strong></div>
         <div className="metric-card"><span>Agent service</span><strong>{up(agent)}</strong></div>
       </div>
+      <section className="content-card"><div className="app-card-header"><h2>Website requests</h2><span className="badge">simulated city</span></div>
+        <div className="table-wrap"><table><thead><tr><th>Request</th><th>Problem</th><th>Status</th><th /></tr></thead><tbody>
+          {web.data?.length === 0 && <tr><td colSpan={4}>No requests filed on the website yet.</td></tr>}
+          {web.data?.map(({ ticket: t }) => (
+            <tr key={t.ticket_id}><td><a className="table-link" href={`/ticket/${t.ticket_id}`}>{t.ticket_id}</a></td><td>{t.text}</td><td><span className="badge">{t.status}</span></td>
+              <td className="num">{t.status === "open" && <button className="btn btn-secondary btn-sm" onClick={() => close.mutate(t.ticket_id)} disabled={close.isPending}>Mark closed (as the city)</button>}</td></tr>
+          ))}
+        </tbody></table></div>
+        <p className="fine" style={{ padding: "0 16px 14px" }}>Stands in for the city closing a request. Once closed, TrueClose checks it and an administrator decides on the reopen from Approvals.</p>
+      </section>
       {users.isLoading && <div className="loading-state">Loading accounts…</div>}
       {users.error && <div className="error-state">Could not load accounts. ({String(users.error)})</div>}
       {users.data && (

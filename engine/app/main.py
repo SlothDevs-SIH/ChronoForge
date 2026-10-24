@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .models import Evidence, MuniActionResult, SatelliteCheckRequest, Score, Ticket, TicketWithScore
+from .models import CloseRequest, Evidence, MuniActionResult, NewRequest, SatelliteCheckRequest, Score, Ticket, TicketWithScore
 from .store import store
 
 _sync_lock = threading.Lock()
@@ -166,6 +166,30 @@ def muni_reopen(ticket_id: str) -> MuniActionResult:
         raise HTTPException(409, f"ticket {ticket_id} is {t.status}; only a closed ticket can be reopened")
     store.set_status(ticket_id, "reopened")
     return MuniActionResult(ticket_id=ticket_id, status="reopened", note="simulated municipal system")
+
+
+@app.post("/requests", response_model=Ticket, dependencies=[Depends(require_admin)])
+def create_request(req: NewRequest) -> Ticket:
+    """A citizen files a complaint on the TrueClose website. Called by the Agent service on their behalf."""
+    if len(req.text.strip()) < 5:
+        raise HTTPException(422, "describe the problem in a few words")
+    try:
+        return store.add_request(category=req.category, text=req.text.strip()[:1000],
+                                 ward=req.ward.strip()[:80] or "unspecified", lat=req.lat, lng=req.lng, lang=req.lang)
+    except NotImplementedError as exc:
+        raise HTTPException(501, str(exc))
+
+
+@app.post("/muni/tickets/{ticket_id}/close", response_model=MuniActionResult, dependencies=[Depends(require_admin)])
+def muni_close(ticket_id: str, req: CloseRequest = CloseRequest()) -> MuniActionResult:
+    """Simulated municipal system closing a website request (a real city does this in its own system)."""
+    try:
+        t = store.close_request(ticket_id, req.note)
+    except NotImplementedError as exc:
+        raise HTTPException(501, str(exc))
+    if t is None:
+        raise HTTPException(409, f"{ticket_id} is not an open website request")
+    return MuniActionResult(ticket_id=ticket_id, status="closed", note="simulated municipal system")
 
 
 @app.post("/muni/tickets/{ticket_id}/escalate", response_model=MuniActionResult)

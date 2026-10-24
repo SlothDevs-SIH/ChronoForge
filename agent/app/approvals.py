@@ -89,7 +89,13 @@ def decide(approval_id: str, decision: str, note: str = "") -> dict:
             # the human approved but the municipal system did not act: say so, and start no outcome clock
             audit.append("action_failed", {"approval_id": approval_id, "ticket_id": a["ticket_id"],
                                            "error": engine_result.get("error", "")[:200]})
-        elif config.OUTCOME_CHECK_DELAY > 0:
+        elif a["action"] == "reopen":
+            try:   # tell the citizen their case was reopened, only after the city system really did it
+                from . import cases
+                cases.notify(a["ticket_id"], cases.REOPENED)
+            except Exception:
+                pass
+        if not (engine_result and not engine_result.get("ok")) and config.OUTCOME_CHECK_DELAY > 0:
             threading.Timer(config.OUTCOME_CHECK_DELAY, run_outcome_check, args=(approval_id,)).start()
     return get(approval_id)
 

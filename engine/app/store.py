@@ -78,6 +78,8 @@ class WarehouseStore:
         self._con = duckdb.connect()
         self._con.execute("create table status_overrides (ticket_id varchar primary key, status varchar)")
         self._load_overrides()
+        self._web: dict[str, dict] = {}
+        self._load_web()
         self._build()
         self.eval_results = _eval_payload()
 
@@ -90,6 +92,11 @@ class WarehouseStore:
         self._con.execute("create table tickets as select * from read_parquet(?, union_by_name=true)", [files])
         # only the demo set carries a "before" photo: keep the column when that file is absent
         self._con.execute("alter table tickets add column if not exists complaint_photo_url varchar")
+        for col in ("h3", "closed_at", "closed_by_hash", "closure_note", "closure_photo_url", "complaint_photo_url"):
+            # a column that is empty in every file is typed NULL by Parquet; website requests need to write text into it
+            self._con.execute(f"alter table tickets alter column {col} set data type varchar")
+        for row in self._web.values():
+            self._insert_web(row)
         self._con.execute("create view v as select t.* replace (coalesce(o.status, t.status) as status) "
                           "from tickets t left join status_overrides o on o.ticket_id = t.ticket_id")
         self._con.execute("drop view if exists vs")
@@ -180,6 +187,50 @@ class WarehouseStore:
     def muni_tickets(self, limit: int) -> list[Ticket]:
         return [x.ticket for x in self.list_tickets(limit=limit)]
 
+    # ---- requests filed through the website (city "web"); persisted in web_requests.json ----
+    def _web_path(self) -> Path:
+        return self._dir / "web_requests.json"
+
+    def _load_web(self) -> None:
+        try:
+            self._web = json.loads(self._web_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            self._web = {}
+
+    def _save_web(self) -> None:
+        tmp = self._web_path().with_suffix(".tmp")
+        tmp.write_text(json.dumps(self._web), encoding="utf-8")
+        tmp.replace(self._web_path())
+
+    def _insert_web(self, row: dict) -> None:
+        self._con.execute(f"insert into tickets ({', '.join(TICKET_COLUMNS)}) values ({', '.join('?' * len(TICKET_COLUMNS))})",
+                          [row.get(c) for c in TICKET_COLUMNS])
+
+    def add_request(self, *, category: str, text: str, ward: str, lat, lng, lang: str) -> Ticket:
+        with self._lock:
+            ticket_id = f"web-{len(self._web) + 1:05d}"
+            row = {"ticket_id": ticket_id, "city": "web", "data_quality": "real", "source": "trueclose-web",
+                   "category": category, "text": text, "lang": lang, "lat": lat, "lng": lng, "h3": None,
+                   "location_precision": "exact" if lat is not None and lng is not None else "none",
+                   "ward": ward, "created_at": _now(), "closed_at": None, "closed_by_hash": None, "status": "open",
+                   "closure_note": None, "closure_photo_url": None, "complaint_photo_url": None}
+            self._web[ticket_id] = row
+            self._insert_web(row)
+            self._save_web()
+        return Ticket(**{k: row[k] for k in TICKET_COLUMNS})
+
+    def close_request(self, ticket_id: str, note: str) -> Optional[Ticket]:
+        """Simulated city closing a website request. Only an open website request can be closed this way."""
+        with self._lock:
+            row = self._web.get(ticket_id)
+            if row is None or row["status"] != "open":
+                return None
+            row.update(status="closed", closed_at=_now(), closure_note=note)
+            self._con.execute("update tickets set status = 'closed', closed_at = ?, closure_note = ? where ticket_id = ?",
+                              [row["closed_at"], note, ticket_id])
+            self._save_web()
+        return self.get_ticket(ticket_id)
+
     # ---- aggregates ----
     def ward_stats(self, city: Optional[str], category: Optional[str]) -> list[dict[str, Any]]:
         where, params = [], []
@@ -266,6 +317,12 @@ class FixtureStore:
 
     def muni_tickets(self, limit: int) -> list[Ticket]:
         return list(self.tickets.values())[:limit]
+
+    def add_request(self, **_) -> Ticket:
+        raise NotImplementedError("website requests need the warehouse store (ENGINE_DATA_MODE=warehouse)")
+
+    def close_request(self, ticket_id: str, note: str):
+        raise NotImplementedError("website requests need the warehouse store (ENGINE_DATA_MODE=warehouse)")
 
     def ward_stats(self, city: Optional[str], category: Optional[str]) -> list[dict[str, Any]]:
         return [w for w in self._ward_stats if (not city or w["city"] == city) and (not category or w["category"] == category)]
