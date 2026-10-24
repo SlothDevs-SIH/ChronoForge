@@ -1,8 +1,13 @@
-"""Module 3 (part): Telegram channel. Register a contact for a ticket, send the "Was it fixed?" message,
-parse the webhook reply into Evidence. Demo contacts are our own registered chats; we never message real
-citizens. Only the hash of the chat id goes into logs, the audit chain and any LLM prompt.
+"""Module 3 (part): citizen channels (Telegram, shared with WhatsApp). Register a contact for a ticket, send the
+"Was it fixed?" message with tap buttons, read the reply (button, number, free text, photo, voice note) into
+Evidence, and answer the citizen like a normal bot: acknowledge, re-ask when unclear, handle /start, /help, STOP.
+
+Demo contacts are our own registered chats; we never message real citizens. Only the hash of the chat id goes into
+logs, the audit chain and any LLM prompt. Bot replies are best-effort: a failed acknowledgement never loses the
+evidence.
 """
 import hashlib
+import logging
 from typing import Callable
 
 import httpx
@@ -11,19 +16,54 @@ from . import audit, citizen, config
 from .db import get_conn, lock
 from .models import Evidence, now_iso
 
+log = logging.getLogger(__name__)
+
 
 def chat_hash(chat_id: str | int) -> str:
     return hashlib.sha1(str(chat_id).encode()).hexdigest()[:16]
 
 
-def send_message(chat_id: str | int, text: str) -> None:
+# ---- Telegram API ----------------------------------------------------------------------------------------------
+def _api(method: str, **payload) -> dict:
     if not config.TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
-    r = httpx.post(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
-                   json={"chat_id": chat_id, "text": text}, timeout=10)
+    r = httpx.post(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/{method}", json=payload, timeout=10)
     r.raise_for_status()
+    return r.json()
 
 
+def answer_buttons(ticket_id: str, lang: str) -> list[list[dict]]:
+    yes, no, partly = citizen.button_labels(lang)
+    return [[{"text": yes, "callback_data": f"ans:{ticket_id}:1"},
+             {"text": no, "callback_data": f"ans:{ticket_id}:2"},
+             {"text": partly, "callback_data": f"ans:{ticket_id}:3"}]]
+
+
+def send_message(chat_id: str | int, text: str, buttons: list[list[dict]] | None = None) -> None:
+    payload = {"chat_id": chat_id, "text": text}
+    if buttons:
+        payload["reply_markup"] = {"inline_keyboard": buttons}
+    _api("sendMessage", **payload)
+
+
+def _notify(channel: str, chat_id: str | int, text: str, buttons=None) -> None:
+    """Best-effort bot reply. Silent when the channel is not configured (tests, offline)."""
+    try:
+        if channel == "whatsapp":
+            from . import whatsapp
+            if config.WHATSAPP_TOKEN and config.WHATSAPP_PHONE_NUMBER_ID:
+                whatsapp.send_text(str(chat_id), text)
+        elif config.TELEGRAM_BOT_TOKEN:
+            try:
+                _api("sendChatAction", chat_id=chat_id, action="typing")
+            except Exception:
+                pass
+            send_message(chat_id, text, buttons)
+    except Exception as exc:   # an undelivered acknowledgement must not break evidence handling
+        log.warning("bot reply failed: %s", type(exc).__name__)
+
+
+# ---- contacts and the first question ---------------------------------------------------------------------------
 def register_contact(ticket_id: str, chat_id: str | int, lang: str = "en", channel: str = "telegram") -> None:
     with lock():
         get_conn().execute(
@@ -44,14 +84,18 @@ def has_contact(ticket_id: str) -> bool:
 
 def send_request(ticket_id: str, category: str, area: str, date: str,
                  sender: Callable[[str | int, str], None] | None = None) -> bool:
-    """Send the prompt in the contact's language. Returns False if there is no usable contact."""
+    """Send the question in the contact's language (with tap buttons on Telegram). False if no usable contact."""
     row = get_request(ticket_id)
     if row is None or row["status"] == "opted_out":
         return False
-    if sender is None:
+    text = citizen.build_prompt(row["lang"], category, area, date)
+    if sender is not None:
+        sender(row["chat_id"], text)
+    elif row["channel"] == "whatsapp":
         from . import whatsapp
-        sender = whatsapp.send_text if row["channel"] == "whatsapp" else send_message
-    sender(row["chat_id"], citizen.build_prompt(row["lang"], category, area, date))
+        whatsapp.send_text(row["chat_id"], text)
+    else:
+        send_message(row["chat_id"], text, answer_buttons(ticket_id, row["lang"]))
     with lock():
         get_conn().execute("UPDATE citizen_requests SET status='asked', asked_at=? WHERE ticket_id=?",
                            (now_iso(), ticket_id))
@@ -60,16 +104,47 @@ def send_request(ticket_id: str, category: str, area: str, date: str,
     return True
 
 
+# ---- incoming messages -----------------------------------------------------------------------------------------
 def handle_update(update: dict, fallback: Callable[[str], str | None] | None = None) -> Evidence | None:
-    """Process one Telegram webhook update. Returns Evidence when the reply answers an open request."""
+    """Process one Telegram update (message or button tap). Returns Evidence when it answers an open question."""
+    cq = update.get("callback_query")
+    if cq:
+        return _handle_button(cq, fallback)
     msg = update.get("message") or {}
     chat_id = (msg.get("chat") or {}).get("id")
     if chat_id is None:
         return None
-    text = msg.get("text") or msg.get("caption") or ""
+    text = (msg.get("text") or msg.get("caption") or "").strip()
+    command = text.lower().split("@")[0]
+    if command in ("/start", "/help"):
+        _notify("telegram", chat_id, citizen.ack_text(_lang_for(chat_id), "help" if command == "/help" else "idle"))
+        return None
     if not text and msg.get("voice"):
         text = transcribe_voice(msg["voice"]["file_id"])
     return handle_reply("telegram", chat_id, text, bool(msg.get("photo")), fallback)
+
+
+def _lang_for(chat_id: str | int, channel: str = "telegram") -> str:
+    row = get_conn().execute("SELECT lang FROM citizen_requests WHERE chat_id=? AND channel=? "
+                             "ORDER BY created_at DESC LIMIT 1", (str(chat_id), channel)).fetchone()
+    return row["lang"] if row else "en"
+
+
+def _handle_button(cq: dict, fallback) -> Evidence | None:
+    chat_id = ((cq.get("message") or {}).get("chat") or {}).get("id")
+    data = cq.get("data") or ""
+    try:   # stop the button's loading spinner and remove the buttons so a tap cannot be repeated
+        if config.TELEGRAM_BOT_TOKEN:
+            _api("answerCallbackQuery", callback_query_id=cq["id"])
+            if cq.get("message"):
+                _api("editMessageReplyMarkup", chat_id=chat_id, message_id=cq["message"]["message_id"],
+                     reply_markup={"inline_keyboard": []})
+    except Exception:
+        pass
+    if chat_id is None or not data.startswith("ans:"):
+        return None
+    _, _, n = data.rpartition(":")
+    return handle_reply("telegram", chat_id, n if n in ("1", "2", "3") else "", False, fallback)
 
 
 def transcribe_voice(file_id: str, fetch=None, transcriber=None) -> str:
@@ -88,21 +163,28 @@ def transcribe_voice(file_id: str, fetch=None, transcriber=None) -> str:
 
 def handle_reply(channel: str, chat_id: str | int, text: str, has_photo: bool = False,
                  fallback: Callable[[str], str | None] | None = None) -> Evidence | None:
-    """Channel-independent: match a reply to the open request for this contact and turn it into Evidence."""
+    """Channel-independent: match a reply to the open question for this contact, record Evidence, answer the
+    citizen. Unclear replies and photos keep the question open so the citizen can still answer it."""
     row = get_conn().execute(
         "SELECT * FROM citizen_requests WHERE chat_id=? AND channel=? AND status='asked' "
         "ORDER BY asked_at DESC LIMIT 1", (str(chat_id), channel)).fetchone()
     if row is None:
+        _notify(channel, chat_id, citizen.ack_text(_lang_for(chat_id, channel), "idle"))
         return None
-    ticket_id = row["ticket_id"]
+    ticket_id, lang = row["ticket_id"], row["lang"]
     audit.append("citizen_reply_received", {"ticket_id": ticket_id, "chat_hash": row["chat_hash"],
                                             "has_photo": has_photo})
     if citizen.parse_intent(text) == "stop":
         with lock():
             get_conn().execute("UPDATE citizen_requests SET status='opted_out' WHERE ticket_id=?", (ticket_id,))
             get_conn().commit()
+        _notify(channel, chat_id, citizen.ack_text(lang, "stop"))
         return None
     ev = citizen.reply_to_evidence(ticket_id, text, fallback, has_photo)
+    again = answer_buttons(ticket_id, lang) if channel == "telegram" else None
+    if ev.verdict == "inconclusive":   # not a yes/no/partly: keep the question open and help them answer
+        _notify(channel, chat_id, citizen.ack_text(lang, "photo" if has_photo and not text else "unclear"), again)
+        return None
     with lock():
         get_conn().execute("UPDATE citizen_requests SET status='answered', answered_at=? WHERE ticket_id=?",
                            (now_iso(), ticket_id))
@@ -111,6 +193,7 @@ def handle_reply(channel: str, chat_id: str | int, text: str, has_photo: bool = 
         get_conn().commit()
     audit.append("tool_result", {"ticket_id": ticket_id, "tool": "ask_citizen", "evidence_id": ev.evidence_id,
                                  "check": ev.check, "verdict": ev.verdict, "lr": ev.likelihood_ratio})
+    _notify(channel, chat_id, citizen.ack_text(lang, ev.details["intent"]))
     return ev
 
 
