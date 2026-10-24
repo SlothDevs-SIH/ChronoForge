@@ -6,6 +6,7 @@ import Platform from "./pages/Platform";
 import Triage from "./pages/Triage";
 import TicketDetail from "./pages/TicketDetail";
 import Approvals from "./pages/Approvals";
+import Hotspots from "./pages/Hotspots";
 import Evaluation from "./pages/Evaluation";
 import AuditLog from "./pages/AuditLog";
 import type { Role } from "./api";
@@ -41,6 +42,7 @@ function AppShell() {
             <NavLink to="/dashboard" className={link}>Overview</NavLink>
             <NavLink to={`/triage${q}`} className={link}>Triage queue</NavLink>
             <NavLink to="/approvals" className={link}>Approvals</NavLink>
+            <NavLink to="/hotspots" className={link}>Repeat reopens</NavLink>
             <NavLink to="/audit" className={link}>Audit log</NavLink>
           </>}
           <NavLink to="/evaluation" className={link}>Evaluation</NavLink>
@@ -94,6 +96,7 @@ export default function App() {
         <Route path="/triage" element={<RequireRole roles={STAFF}><CityRoute /></RequireRole>} />
         <Route path="/ticket/:id" element={<RequireRole roles={STAFF}><TicketDetail /></RequireRole>} />
         <Route path="/approvals" element={<RequireRole roles={STAFF}><Approvals /></RequireRole>} />
+        <Route path="/hotspots" element={<RequireRole roles={STAFF}><Hotspots /></RequireRole>} />
         <Route path="/audit" element={<RequireRole roles={STAFF}><AuditLog /></RequireRole>} />
       </Route>
       <Route path="*" element={<NotFound />} />

@@ -68,3 +68,15 @@ FIRST_ADMIN_PASSWORD = os.getenv("AGENT_FIRST_ADMIN_PASSWORD", "")
 # Case tracking: how often (seconds) the watcher looks for tracked tickets the city has closed. 0 = off.
 WATCH_INTERVAL = float(os.getenv("AGENT_WATCH_INTERVAL", "15"))
 ENGINE_ADMIN_TOKEN = os.getenv("ENGINE_ADMIN_TOKEN", "")   # sent to the Engine when it is protected with one
+
+# Citizen photos sent over Telegram are stored here (resized, EXIF removed) for a person to review.
+PHOTO_DIR = os.getenv("AGENT_PHOTO_DIR", "data/citizen_photos")
+MAX_PHOTO_BYTES = int(os.getenv("AGENT_MAX_PHOTO_BYTES", str(8 * 1024 * 1024)))
+# Silence handling: remind once after this many hours without an answer, then escalate to a person.
+REMINDER_HOURS = float(os.getenv("AGENT_REMINDER_HOURS", "24"))
+ESCALATE_HOURS = float(os.getenv("AGENT_ESCALATE_HOURS", "48"))
+# Abuse limits (per client). AGENT_RATE_LIMIT=0 turns them off.
+RATE_LIMIT = os.getenv("AGENT_RATE_LIMIT", "1") == "1"
+REQUESTS_PER_HOUR = int(os.getenv("AGENT_REQUESTS_PER_HOUR", "10"))
+CORS_ORIGINS = [o.strip() for o in os.getenv("AGENT_CORS_ORIGINS", "*").split(",") if o.strip()]
+TRUST_PROXY = os.getenv("AGENT_TRUST_PROXY", "0") == "1"   # read the client address from X-Forwarded-For (behind a proxy)

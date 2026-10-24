@@ -97,7 +97,15 @@ export interface Approval {
   verdict_snapshot: Verdict;
   status: "pending" | "approved" | "rejected";
   note: string | null;
+  engine_result?: { ok: boolean; error?: string } | null;
+  explain?: { summary: string; against: string[]; for: string[]; unknown: string[] };
 }
+
+export interface TimelineEvent { ts: string; kind: string; text: string; audience: "citizen" | "staff" }
+export interface CasePhoto { photo_id: string; received_at: string; data_url: string; details: { flags?: string[]; has_gps?: boolean; distance_m?: number } }
+export interface SimilarRequest { ticket_id: string; text: string; ward: string; status: string; similarity: number }
+export interface Summary { days: number; counts: Record<string, number>; labels: Record<string, string>; not_fixed_rate: number | null; pending_approvals: number; messages: { pending: number; sent: number; failed: number }; text: string }
+export interface Hotspot { city: string; kind: "ward" | "closer"; key: string; closed: number; reopened: number; rate: number; city_rate: number; ratio: number; p_value: number }
 
 export interface AuditEntry {
   idx: number; ts: string; prev_hash: string; hash: string;

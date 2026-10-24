@@ -1,4 +1,5 @@
-# Engine + Agent. The web app runs with `npm run dev` for now (its dev proxy points at localhost:8001/8002).
+# Engine + Agent. The web app is a static build (web/): deploy it to Vercel or any static host and point /api/engine and
+# /api/agent at these two services (see web/vercel.json and README "Deploying").
 services:
   engine:
     build:
@@ -6,6 +7,8 @@ services:
       dockerfile: engine/Dockerfile
     ports: ["8001:8001"]
     env_file: [.env]
+    volumes:
+      - ./data:/data            # the ticket warehouse (data/warehouse) and satellite cache; website requests are saved here too
   agent:
     build:
       context: .
@@ -14,4 +17,10 @@ services:
     env_file: [.env]
     environment:
       ENGINE_URL: http://engine:8001
+      AGENT_USE_STUBS: "0"      # real Engine, real checks
+      TELEGRAM_POLLING: "1"     # no public URL needed for the bot
+    volumes:
+      - agent-data:/data        # accounts, cases, approvals, citizen photos: keep this volume or all of it is lost
     depends_on: [engine]
+volumes:
+  agent-data:

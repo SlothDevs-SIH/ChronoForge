@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import httpx
 
-from . import audit, config
+from . import audit, config, events
 from .db import get_conn, lock
 from .models import Verdict, now_iso
 
@@ -83,6 +83,12 @@ def decide(approval_id: str, decision: str, note: str = "") -> dict:
         get_conn().commit()
     audit.append("approval_decided", {"approval_id": approval_id, "ticket_id": a["ticket_id"],
                                       "decision": decision, "note": note})
+    if decision == "reject":
+        events.record(a["ticket_id"], f"{a['action']}_rejected",
+                      f"An administrator decided not to {a['action']}." + (f" Note: {note}" if note else ""), "staff")
+    elif engine_result and not engine_result.get("ok"):
+        events.record(a["ticket_id"], "action_failed",
+                      f"{a['action']} was approved but the city system did not act. It can be retried.", "staff")
     if decision == "approve":
         _record_prediction(a)
         if engine_result and not engine_result.get("ok"):
@@ -90,13 +96,36 @@ def decide(approval_id: str, decision: str, note: str = "") -> dict:
             audit.append("action_failed", {"approval_id": approval_id, "ticket_id": a["ticket_id"],
                                            "error": engine_result.get("error", "")[:200]})
         elif a["action"] == "reopen":
-            try:   # tell the citizen their case was reopened, only after the city system really did it
-                from . import cases
-                cases.notify(a["ticket_id"], cases.REOPENED)
-            except Exception:
-                pass
+            _announce_reopen(a["ticket_id"])
         if not (engine_result and not engine_result.get("ok")) and config.OUTCOME_CHECK_DELAY > 0:
             threading.Timer(config.OUTCOME_CHECK_DELAY, run_outcome_check, args=(approval_id,)).start()
+    return get(approval_id)
+
+
+def _announce_reopen(ticket_id: str) -> None:
+    """Only after the city system really reopened it: record it and tell the citizen."""
+    events.record(ticket_id, "reopened", "An administrator reviewed the evidence and the request was reopened.")
+    try:
+        from . import cases
+        cases.notify(ticket_id, cases.REOPENED)
+    except Exception:
+        pass
+
+
+def retry(approval_id: str) -> dict:
+    """An approved reopen whose city call failed: try the city system again. Never acts on a rejected or pending one."""
+    a = get(approval_id)
+    if a is None:
+        raise KeyError(approval_id)
+    if a["status"] != "approved" or (a["engine_result"] or {}).get("ok", True):
+        raise ValueError("nothing to retry: this approval did not fail")
+    result = _call_engine(a["action"], a["ticket_id"])
+    with lock():
+        get_conn().execute("UPDATE approvals SET engine_result=? WHERE approval_id=?", (json.dumps(result), approval_id))
+        get_conn().commit()
+    audit.append("approval_retried", {"approval_id": approval_id, "ticket_id": a["ticket_id"], "ok": result["ok"]})
+    if result["ok"] and a["action"] == "reopen":
+        _announce_reopen(a["ticket_id"])
     return get(approval_id)
 
 

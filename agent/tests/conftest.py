@@ -9,9 +9,11 @@ from app import config, db  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def fresh_db():
+def fresh_db(tmp_path):
     db.reset(":memory:")
     config.STEP_DELAY = 0
+    config.RATE_LIMIT = False                      # test_features.py turns it on where it is under test
+    config.PHOTO_DIR = str(tmp_path / "citizen_photos")
     config.AUTH_ENFORCE = False   # older suites call officer endpoints directly; test_auth.py turns it on
     config.OUTCOME_CHECK_DELAY = 0
     config.USE_STUBS = True

@@ -206,6 +206,18 @@ class WarehouseStore:
         self._con.execute(f"insert into tickets ({', '.join(TICKET_COLUMNS)}) values ({', '.join('?' * len(TICKET_COLUMNS))})",
                           [row.get(c) for c in TICKET_COLUMNS])
 
+    def reopen_groups(self) -> list[dict[str, Any]]:
+        out = []
+        for kind, col, extra in (("ward", "ward", ""), ("closer", "substr(closed_by_hash, 1, 8)", " and closed_by_hash is not null")):
+            out += self._rows(f"select city, '{kind}' as kind, {col} as key, count(*)::int as done, "
+                              f"sum((status = 'reopened')::int)::int as reopened from v "
+                              f"where status in ('closed', 'reopened'){extra} group by city, key")
+        return out
+
+    def open_web_requests(self) -> list[dict[str, Any]]:
+        return self._rows("select ticket_id, category, ward, text, status, created_at from v "
+                          "where city = 'web' and status in ('open', 'reopened')")
+
     def add_request(self, *, category: str, text: str, ward: str, lat, lng, lang: str) -> Ticket:
         with self._lock:
             ticket_id = f"web-{len(self._web) + 1:05d}"
@@ -317,6 +329,12 @@ class FixtureStore:
 
     def muni_tickets(self, limit: int) -> list[Ticket]:
         return list(self.tickets.values())[:limit]
+
+    def reopen_groups(self) -> list[dict[str, Any]]:
+        return []
+
+    def open_web_requests(self) -> list[dict[str, Any]]:
+        return []
 
     def add_request(self, **_) -> Ticket:
         raise NotImplementedError("website requests need the warehouse store (ENGINE_DATA_MODE=warehouse)")

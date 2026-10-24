@@ -71,3 +71,34 @@ CREATE TABLE IF NOT EXISTS user_tickets (
   added_at TEXT NOT NULL,
   PRIMARY KEY (user_id, ticket_id)
 );
+CREATE TABLE IF NOT EXISTS case_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id TEXT NOT NULL,
+  ts TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  text TEXT NOT NULL,
+  audience TEXT NOT NULL DEFAULT 'citizen'   -- citizen: the citizen and staff can see it; staff: staff only
+);
+CREATE INDEX IF NOT EXISTS case_events_ticket ON case_events (ticket_id, id);
+CREATE TABLE IF NOT EXISTS outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id TEXT,
+  channel TEXT NOT NULL,
+  chat_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  buttons TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_try REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',    -- pending | sent | failed
+  last_error TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS case_photos (
+  photo_id TEXT PRIMARY KEY,
+  ticket_id TEXT NOT NULL,
+  chat_hash TEXT NOT NULL,
+  phash TEXT NOT NULL,
+  path TEXT NOT NULL,
+  details TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);

@@ -6,7 +6,7 @@ import time
 from typing import Callable
 from uuid import uuid4
 
-from . import approvals, audit, config, fusion, tools
+from . import approvals, audit, config, events, fusion, tools
 from .db import get_conn, lock
 from .models import Evidence, TraceEvent, Verdict, now_iso
 from .planner import CHECK_OF_TOOL, PlanState, choose_next, validate_choice
@@ -151,7 +151,13 @@ def execute(run_id: str, planner: Planner | None = None, delay: float | None = N
             approval = approvals.propose_action(run.ticket_id, run_id, "reopen", verdict)
             run.emit("approval_needed", f"reopen proposed, awaiting human approval {approval['approval_id']}",
                      "propose_action")
+            events.record(run.ticket_id, "reopen_proposed", "A reopen was proposed and is waiting for an administrator.", "staff")
         run.status = "done"
+        try:   # tell the case tracker (citizen message, timeline); a failure here must never fail the run itself
+            from . import cases
+            cases.on_verdict(run.ticket_id, verdict)
+        except Exception:
+            pass
     except Exception as exc:  # surface failures in the trace instead of a silent dead stream
         run.status = "error"
         run.emit("thought", f"run failed: {exc}")

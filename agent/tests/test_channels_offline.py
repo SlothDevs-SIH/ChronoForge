@@ -30,7 +30,7 @@ def test_whatsapp_round_trip_and_channel_isolation(monkeypatch):
     assert telegram.handle_reply("telegram", "9190", "2") is None
     r = client.post("/channels/whatsapp/webhook", json=wa_payload("9190", "2"))
     assert r.status_code == 200 and len(r.json()["run_ids"]) == 1
-    assert "9190" not in str(audit.entries(200))
+    assert "'9190'" not in str(audit.entries(200))   # the chat id as a value; a bare digit run can occur inside a random hash
 
 
 def test_whatsapp_verify_handshake(monkeypatch):

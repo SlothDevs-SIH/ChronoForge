@@ -13,7 +13,7 @@ from typing import Callable
 
 import httpx
 
-from . import audit, citizen, config
+from . import audit, citizen, config, events
 from .db import get_conn, lock
 from .models import Evidence, now_iso
 
@@ -61,15 +61,24 @@ def send_message(chat_id: str | int, text: str, buttons: list[list[dict]] | None
     _api("sendMessage", **payload)
 
 
+def deliver(channel: str, chat_id: str | int, text: str, buttons=None) -> bool:
+    """Send one message or raise. Returns False when the channel is not configured (nothing to send with)."""
+    if channel == "whatsapp":
+        from . import whatsapp
+        if not (config.WHATSAPP_TOKEN and config.WHATSAPP_PHONE_NUMBER_ID):
+            return False
+        whatsapp.send_text(str(chat_id), text)
+        return True
+    if not config.TELEGRAM_BOT_TOKEN:
+        return False
+    send_message(chat_id, text, buttons)
+    return True
+
+
 def _notify(channel: str, chat_id: str | int, text: str, buttons=None) -> None:
-    """Best-effort bot reply. Silent when the channel is not configured (tests, offline)."""
+    """Best-effort bot reply to something the citizen just sent. Silent when the channel is not configured."""
     try:
-        if channel == "whatsapp":
-            from . import whatsapp
-            if config.WHATSAPP_TOKEN and config.WHATSAPP_PHONE_NUMBER_ID:
-                whatsapp.send_text(str(chat_id), text)
-        elif config.TELEGRAM_BOT_TOKEN:
-            send_message(chat_id, text, buttons)
+        deliver(channel, chat_id, text, buttons)
     except Exception as exc:   # an undelivered acknowledgement must not break evidence handling
         log.warning("bot reply failed: %s", type(exc).__name__)
 
@@ -147,7 +156,32 @@ def handle_update(update: dict, fallback: Callable[[str], str | None] | None = N
         return None
     if not text and msg.get("voice"):
         text = transcribe_voice(msg["voice"]["file_id"])
-    return handle_reply("telegram", chat_id, text, bool(msg.get("photo")), fallback)
+    from . import cases
+    cases.follow_language(chat_id, text)
+    image = _image_of(msg)
+    if image:
+        cases.receive_photo(chat_id, image)
+        if not text:
+            return None   # a bare photo is stored for a person to review; it never answers the question by itself
+    return handle_reply("telegram", chat_id, text, bool(image), fallback)
+
+
+def _image_of(msg: dict) -> dict | None:
+    """The largest usable image in a message: a normal photo (Telegram strips its EXIF) or an image sent as a file."""
+    if msg.get("photo"):
+        sizes = [p for p in msg["photo"] if (p.get("file_size") or 0) <= config.MAX_PHOTO_BYTES] or msg["photo"][:1]
+        return {"file_id": sizes[-1]["file_id"], "source": "photo", "size": sizes[-1].get("file_size") or 0}
+    doc = msg.get("document") or {}
+    if str(doc.get("mime_type", "")).startswith("image/"):
+        return {"file_id": doc["file_id"], "source": "file", "size": doc.get("file_size") or 0}
+    return None
+
+
+def download_file(file_id: str) -> bytes:
+    info = _http().get(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/getFile", params={"file_id": file_id}).json()["result"]
+    r = _http().get(f"https://api.telegram.org/file/bot{config.TELEGRAM_BOT_TOKEN}/{info['file_path']}", timeout=30)
+    r.raise_for_status()
+    return r.content
 
 
 def _lang_for(chat_id: str | int, channel: str = "telegram") -> str:
@@ -233,6 +267,7 @@ def handle_reply(channel: str, chat_id: str | int, text: str, has_photo: bool = 
         get_conn().commit()
     audit.append("tool_result", {"ticket_id": ticket_id, "tool": "ask_citizen", "evidence_id": ev.evidence_id,
                                  "check": ev.check, "verdict": ev.verdict, "lr": ev.likelihood_ratio})
+    events.record(ticket_id, "citizen_reply", f"The citizen answered: {ev.details['intent'].replace('_', ' ')}.")
     _notify(channel, chat_id, citizen.ack_text(lang, ev.details["intent"]))
     return ev
 

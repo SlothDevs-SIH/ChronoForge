@@ -8,7 +8,10 @@ SENT = []
 
 def _capture(monkeypatch):
     SENT.clear()
-    monkeypatch.setattr(telegram, "_notify", lambda channel, chat_id, text, buttons=None: SENT.append((str(chat_id), text)))
+    def fake(channel, chat_id, text, buttons=None):
+        SENT.append((str(chat_id), text))
+        return True
+    monkeypatch.setattr(telegram, "deliver", fake)
 
 
 def _user():
@@ -44,12 +47,17 @@ def test_watcher_handles_each_closure_once_and_skips_open_approvals(monkeypatch)
     auth.add_ticket(uid, "web-00001")
     telegram.register_contact("web-00001", 555)
     open_ = {"status": "open", "closed_at": None}
-    closed = {"status": "closed", "closed_at": "2026-10-24T10:00:00Z"}
+    from datetime import datetime, timedelta, timezone
+
+    def later(h):
+        return (datetime.now(timezone.utc) + timedelta(hours=h)).isoformat()
+    closed = {"status": "closed", "closed_at": later(1)}
     assert cases.tick(lambda t: open_) == []
     assert cases.tick(lambda t: closed) == ["web-00001"]
     assert "closed" in SENT[-1][1]
     assert cases.tick(lambda t: closed) == []                         # same closure: not run again
-    assert cases.tick(lambda t: {**closed, "closed_at": "2026-10-25T10:00:00Z"}) == ["web-00001"]   # a new closure is
+    assert cases.tick(lambda t: {**closed, "closed_at": later(2)}) == ["web-00001"]               # a new closure is
+    assert cases.tick(lambda t: {**closed, "closed_at": "2020-01-01T00:00:00Z"}) == []           # closed before tracking: not news
 
 
 def test_reopen_is_only_announced_after_approval(monkeypatch):
@@ -61,6 +69,8 @@ def test_reopen_is_only_announced_after_approval(monkeypatch):
     monkeypatch.setattr(approvals, "_call_engine", lambda action, tid: {"ok": True, "response": {}})
     approvals.decide(a["approval_id"], "approve")
     assert "reopened" in SENT[-1][1]
+    from app import events
+    assert [e["kind"] for e in events.timeline("web-00001", staff=False)] == ["reopened"]   # the citizen's history shows it too
 
 
 def test_failed_reopen_does_not_tell_the_citizen(monkeypatch):

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../api";
@@ -21,6 +22,8 @@ export default function Admin() {
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["web-requests"] }); toast("success", "Marked closed. The case watcher will check it within seconds."); },
     onError: (e) => toast("error", e instanceof Error ? e.message : "Could not close the request."),
   });
+  const [days, setDays] = useState(7);
+  const digest = useQuery({ queryKey: ["summary", days], queryFn: () => api.summary(days), retry: false, refetchInterval: 15000 });
   const rows = users.data ?? [];
   const pending = rows.filter((u) => u.status === "pending");
   const up = (q: { data?: { ok: boolean }; isLoading: boolean }) => (q.data?.ok ? "Up" : q.isLoading ? "…" : "Down");
@@ -34,6 +37,18 @@ export default function Admin() {
         <div className="metric-card"><span>Engine service</span><strong>{up(engine)}</strong></div>
         <div className="metric-card"><span>Agent service</span><strong>{up(agent)}</strong></div>
       </div>
+      <section className="content-card"><div className="app-card-header"><h2>Digest</h2>
+        <div className="seg" role="group" aria-label="Period">{[7, 30].map((d) => <button key={d} className={days === d ? "is-on" : ""} onClick={() => setDays(d)}>{d} days</button>)}</div></div>
+        <div className="app-card-body">
+          {digest.isLoading && <p className="muted">Loading…</p>}
+          {digest.error && <p className="muted">The digest is not available right now.</p>}
+          {digest.data && <>
+            <p className="digest-text">{digest.data.text}</p>
+            <div className="digest-grid">{Object.entries(digest.data.labels).map(([k, label]) => <div key={k}><strong>{digest.data.counts[k] ?? 0}</strong><span>{label}</span></div>)}</div>
+            {digest.data.messages.failed > 0 && <p className="auth-error">{digest.data.messages.failed} citizen messages could not be delivered{digest.data.messages.pending ? `, ${digest.data.messages.pending} still retrying` : ""}.</p>}
+          </>}
+        </div>
+      </section>
       <section className="content-card"><div className="app-card-header"><h2>Website requests</h2><span className="badge">simulated city</span></div>
         <div className="table-wrap"><table><thead><tr><th>Request</th><th>Problem</th><th>Status</th><th /></tr></thead><tbody>
           {web.data?.length === 0 && <tr><td colSpan={4}>No requests filed on the website yet.</td></tr>}

@@ -1,5 +1,5 @@
 // The only place that calls fetch. Components import from here.
-import type { Approval, WardDot, AuditEntry, CitySummary, Evidence, Score, Ticket, TicketWithScore, TraceEvent, WardStat } from "./types";
+import type { CasePhoto, Hotspot, SimilarRequest, Summary, TimelineEvent, Approval, WardDot, AuditEntry, CitySummary, Evidence, Score, Ticket, TicketWithScore, TraceEvent, WardStat } from "./types";
 
 const ENGINE = "/api/engine";
 const AGENT = "/api/agent";
@@ -45,6 +45,13 @@ export const api = {
   submitRequest: (body: { category: string; text: string; ward: string }) => post(`${AGENT}/me/requests`, body).then((r) => json<{ ticket: Ticket; telegram_link: string | null; linked: boolean }>(r)),
   telegramLink: (id: string) => post(`${AGENT}/me/requests/${encodeURIComponent(id)}/telegram-link`, {}).then((r) => json<{ telegram_link: string | null; linked: boolean }>(r)),
   closeRequest: (id: string) => post(`${AGENT}/admin/requests/${encodeURIComponent(id)}/close`, {}).then((r) => json<{ ticket_id: string; status: string }>(r)),
+  myTimeline: (id: string) => afetch(`${AGENT}/me/requests/${encodeURIComponent(id)}/timeline`).then((r) => json<TimelineEvent[]>(r)),
+  caseTimeline: (id: string) => afetch(`${AGENT}/cases/${encodeURIComponent(id)}/timeline`).then((r) => json<TimelineEvent[]>(r)),
+  casePhotos: (id: string) => afetch(`${AGENT}/cases/${encodeURIComponent(id)}/photos`).then((r) => json<CasePhoto[]>(r)),
+  similar: (category: string, text: string, ward: string) => afetch(`${AGENT}/me/requests/similar?${new URLSearchParams({ category, text, ward })}`).then((r) => json<SimilarRequest[]>(r)),
+  summary: (days: number) => afetch(`${AGENT}/admin/summary?days=${days}`).then((r) => json<Summary>(r)),
+  retryApproval: (id: string) => post(`${AGENT}/approvals/${id}/retry`, {}).then((r) => json<Approval>(r)),
+  hotspots: () => afetch(`${ENGINE}/insights/hotspots`).then((r) => json<{ rule: string; caveat: string; hotspots: Hotspot[] }>(r)),
   myTickets: () => afetch(`${AGENT}/me/tickets`).then((r) => json<string[]>(r)),
   addMyTicket: (ticket_id: string) => post(`${AGENT}/me/tickets`, { ticket_id }).then((r) => json<string[]>(r)),
   evalResults: () => afetch(`${ENGINE}/eval/results`).then((r) => json<Record<string, unknown>>(r)),

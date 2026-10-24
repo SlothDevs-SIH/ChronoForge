@@ -2,6 +2,8 @@
 import asyncio
 import json
 import threading
+
+import httpx
 import time
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -11,7 +13,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from pydantic import BaseModel
 
-from . import agent, approvals, audit, auth, cases, config, llm, llm_planner, telegram, tools, whatsapp
+from . import agent, approvals, audit, auth, cases, config, events, explain, outbox, ratelimit, summary, llm, llm_planner, telegram, tools, whatsapp
 from .db import get_conn, lock
 from .models import DecideRequest, PhotoRequest
 from .photo import PhotoIndex, check_ref_allowed, verify_photo
@@ -23,7 +25,7 @@ def require_admin(x_admin_token: str | None = Header(default=None)):
 
 
 app = FastAPI(title="TrueClose Agent service")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 
 @app.get("/health")
@@ -221,7 +223,10 @@ def get_run(run_id: str):
 
 @app.get("/approvals", dependencies=[Depends(auth.require_role("officer", "admin"))])
 def list_approvals(status: str | None = "pending"):
-    return approvals.list_approvals(status)
+    out = approvals.list_approvals(status)
+    for a in out:   # plain-language reasons, built only from the recorded evidence
+        a["explain"] = explain.for_verdict(a["verdict_snapshot"])
+    return out
 
 
 @app.post("/approvals/{approval_id}/decide", dependencies=[Depends(require_admin), Depends(auth.require_role("officer", "admin"))])
@@ -274,7 +279,7 @@ def seed_first_admin():
     auth.seed_admin()
 
 
-@app.post("/auth/register")
+@app.post("/auth/register", dependencies=[Depends(ratelimit.limit("register", 8, 60))])
 def register(req: RegisterRequest):
     try:
         return auth.register(req.email, req.name, req.password, req.role)
@@ -282,7 +287,7 @@ def register(req: RegisterRequest):
         raise HTTPException(400, str(exc))
 
 
-@app.post("/auth/login")
+@app.post("/auth/login", dependencies=[Depends(ratelimit.limit("login", 10, 60))])
 def login(req: LoginRequest):
     try:
         return auth.login(req.email, req.password)
@@ -344,6 +349,7 @@ def start_case_watcher():
 @app.post("/me/requests")
 def submit_request(req: NewCase, user=Depends(auth.require_role("citizen"))):
     """A citizen files a request on the website. Returns the ticket and a one-time link that connects Telegram."""
+    ratelimit.check_user("request", user["user_id"], config.REQUESTS_PER_HOUR, 3600)
     try:
         return cases.submit(user["user_id"], req.category, req.text, req.ward, req.lat, req.lng)
     except ValueError as exc:
@@ -368,3 +374,64 @@ def admin_close_request(ticket_id: str, _=Depends(auth.require_role("admin"))):
         raise HTTPException(409, str(exc))
     except Exception:
         raise HTTPException(503, "the Engine is not reachable")
+
+
+@app.get("/ready")
+def ready():
+    """Readiness for a host's health check: the database answers and the Engine is reachable (if real services are on)."""
+    problems = []
+    try:
+        get_conn().execute("SELECT 1").fetchone()
+    except Exception:
+        problems.append("database")
+    if not config.USE_STUBS:
+        try:
+            httpx.get(f"{config.ENGINE_URL}/health", timeout=3).raise_for_status()
+        except Exception:
+            problems.append("engine")
+    if problems:
+        raise HTTPException(503, "not ready: " + ", ".join(problems))
+    return {"ok": True, "auth_secret_set": bool(config.AUTH_SECRET), "telegram": bool(config.TELEGRAM_BOT_TOKEN)}
+
+
+@app.post("/approvals/{approval_id}/retry", dependencies=[Depends(auth.require_role("officer", "admin"))])
+def retry_approval(approval_id: str):
+    try:
+        return approvals.retry(approval_id)
+    except KeyError:
+        raise HTTPException(404, "unknown approval")
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+
+
+@app.get("/cases/{ticket_id}/timeline")
+def case_timeline_staff(ticket_id: str, _=Depends(auth.require_role("officer", "admin"))):
+    return events.timeline(ticket_id, staff=True)
+
+
+@app.get("/me/requests/{ticket_id}/timeline")
+def case_timeline_citizen(ticket_id: str, user=Depends(auth.require_role("citizen"))):
+    if ticket_id not in auth.my_tickets(user["user_id"]):
+        raise HTTPException(404, "unknown request")
+    return events.timeline(ticket_id, staff=False)
+
+
+@app.get("/cases/{ticket_id}/photos")
+def case_photos(ticket_id: str, _=Depends(auth.require_role("officer", "admin"))):
+    return cases.photos_for(ticket_id)
+
+
+@app.get("/me/requests/similar")
+def similar_requests(category: str, text: str, ward: str = "", user=Depends(auth.require_role("citizen"))):
+    """Before filing: open website requests that look like the same problem, so the citizen can follow one instead."""
+    try:
+        r = httpx.get(f"{config.ENGINE_URL}/requests/similar", params={"category": category, "text": text, "ward": ward}, timeout=5)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return []   # the check is a convenience: if it cannot run, filing must still work
+
+
+@app.get("/admin/summary")
+def admin_summary(days: int = 7, _=Depends(auth.require_role("admin"))):
+    return summary.build(max(1, min(days, 365)))

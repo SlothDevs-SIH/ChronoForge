@@ -42,5 +42,12 @@ API docs: http://localhost:8001/docs and http://localhost:8002/docs. Tests: `cd 
 
 On ordinary real tickets the agent has almost no evidence (see `INTEGRATION.md`). Never present stub output as a result.
 
+## Deploying
+
+1. **Engine + Agent** (any host that runs Docker): `docker compose up --build`. Copy `agent/.env.example` to `.env` at the repo root and set the REQUIRED lines (auth secret, first admin, Telegram token). Keep the `agent-data` volume (accounts, cases, photos) and mount `./data` for the ticket warehouse. Run **one** agent per Telegram bot token.
+2. **Checks:** `GET :8002/ready` is 200 when the database and the Engine answer; `GET :8001/health` for the Engine.
+3. **Website** (`web/`): `npm run build`, host `dist/` on Vercel or any static host. Route `/api/agent/*` and `/api/engine/*` to the two services BEFORE the single-page catch-all in `web/vercel.json`, and set `AGENT_CORS_ORIGINS` to the site address.
+4. Server events (the live agent trace) use server-sent events: the proxy in front of the Agent must not buffer them.
+
 ## Prior work
 GEOAI-04 (satellite change engine) and the Catalyst AI engines are our earlier projects and are reused here as acknowledged prior components. The closure-integrity logic, agent, connectors and verification loop are new this weekend.

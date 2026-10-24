@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .models import CloseRequest, Evidence, MuniActionResult, NewRequest, SatelliteCheckRequest, Score, Ticket, TicketWithScore
+from . import insights
 from .store import store
 
 _sync_lock = threading.Lock()
@@ -178,6 +179,20 @@ def create_request(req: NewRequest) -> Ticket:
                                  ward=req.ward.strip()[:80] or "unspecified", lat=req.lat, lng=req.lng, lang=req.lang)
     except NotImplementedError as exc:
         raise HTTPException(501, str(exc))
+
+
+@app.get("/requests/similar")
+def similar_requests(category: str, text: str, ward: str = "", limit: int = Query(3, ge=1, le=10)) -> list[dict]:
+    """Open website requests that look like the same problem, so a citizen can follow one instead of filing another."""
+    return insights.similar(store.open_web_requests(), category=category, ward=ward, text=text, limit=limit)
+
+
+@app.get("/insights/hotspots")
+def hotspots(min_closed: int = Query(insights.MIN_CLOSED, ge=10, le=1000)) -> dict:
+    """Wards and closing officers (by hash) whose closures are reopened far more often than their city average."""
+    return {"min_closed": min_closed, "rule": "one-sided binomial test, Bonferroni-corrected, and at least 1.5 times the city rate",
+            "caveat": "A reopen is a proxy for a bad closure and this shows where reopens cluster, not who is at fault.",
+            "hotspots": insights.hotspots(store.reopen_groups(), min_closed)}
 
 
 @app.post("/muni/tickets/{ticket_id}/close", response_model=MuniActionResult, dependencies=[Depends(require_admin)])
