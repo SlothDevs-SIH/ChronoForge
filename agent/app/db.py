@@ -40,13 +40,18 @@ def translate_sql(sql: str) -> tuple[str, bool]:
 
 
 class _PgCursor:
-    def __init__(self, cur, lastrowid=None):
-        self._cur, self.lastrowid = cur, lastrowid
+    def __init__(self, cur, lastrowid=None, rows=None):
+        self._cur, self.lastrowid, self._rows = cur, lastrowid, rows   # rows: already fetched (a read that released its lock)
 
     def fetchone(self):
+        if self._rows is not None:
+            return self._rows.pop(0) if self._rows else None
         return self._cur.fetchone() if self._cur.description else None
 
     def fetchall(self):
+        if self._rows is not None:
+            rows, self._rows = self._rows, []
+            return rows
         return self._cur.fetchall() if self._cur.description else []
 
     def __iter__(self):
@@ -60,6 +65,7 @@ class PgConnection:
     def __init__(self, url: str):
         self.url = url
         self._c = None
+        self._dirty = False   # True while this connection holds uncommitted writes
         self._connect()
 
     def _connect(self):
@@ -74,6 +80,14 @@ class PgConnection:
             try:
                 cur = self._c.execute(sql, tuple(params))
                 last = cur.fetchone()["idx"] if returning else None
+                if sql.lstrip()[:6].upper() != "SELECT" or returning:
+                    self._dirty = True
+                elif not self._dirty:
+                    # A read with nothing pending: fetch it and end the transaction now. Left open, the connection sits
+                    # "idle in transaction" holding a lock that blocks schema changes and everything queued behind them.
+                    rows = cur.fetchall() if cur.description else []
+                    self._c.rollback()
+                    return _PgCursor(cur, last, rows)
                 return _PgCursor(cur, last)
             except psycopg.OperationalError:
                 if attempt:
@@ -81,10 +95,12 @@ class PgConnection:
                 self._connect()
             except Exception:
                 self._c.rollback()   # a failed statement must not poison the next one
+                self._dirty = False
                 raise
 
     def commit(self):
         self._c.commit()
+        self._dirty = False
 
     def close(self):
         if self._c is not None:

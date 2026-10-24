@@ -202,10 +202,11 @@ def test_postgres_connection_reconnects_once_and_rolls_back_failed_statements(mo
     made[0].fail_next, made[0].fail_with = True, Operational("server closed the connection")
     assert conn.execute("SELECT 1").fetchone() == {"n": 1}
     assert len(made) == 2                                              # one reconnect, then the statement ran
+    before = made[1].rollbacks                                         # a plain read also ends its transaction with a rollback
     made[1].fail_next, made[1].fail_with = True, ValueError("constraint violated")
     with pytest.raises(ValueError):
         conn.execute("SELECT 2")
-    assert made[1].rollbacks == 1                                      # a failed statement must not poison the next
+    assert made[1].rollbacks == before + 1                             # a failed statement must not poison the next
     assert conn.execute("SELECT 3").fetchone() == {"n": 1}
 
 
@@ -246,3 +247,27 @@ def test_postgres_cursor_can_be_looped_over_like_a_sqlite_cursor():
     class NoRows:
         description = None
     assert list(db._PgCursor(NoRows())) == []
+
+
+def test_postgres_reads_release_their_lock_but_writes_wait_for_commit():
+    """A read on the shared Postgres connection must end its transaction, or it sits idle-in-transaction and blocks DDL."""
+    calls = []
+    class Cur:
+        description = [("k",)]
+        def __init__(self, rows): self.rows = rows
+        def fetchall(self): return list(self.rows)
+        def fetchone(self): return self.rows[0] if self.rows else None
+    class Raw:
+        def execute(self, sql, params): calls.append(("exec", sql.split()[0])); return Cur([{"k": 1}])
+        def rollback(self): calls.append(("rollback",))
+        def commit(self): calls.append(("commit",))
+    pg = db.PgConnection.__new__(db.PgConnection)
+    pg.url, pg._c, pg._dirty = "", Raw(), False
+    assert pg.execute("SELECT k FROM kv").fetchall() == [{"k": 1}]
+    assert calls[-1] == ("rollback",)                     # read: transaction ended at once
+    pg.execute("INSERT INTO kv (k, v) VALUES (?, ?)", ("a", "b"))
+    calls.clear()
+    pg.execute("SELECT k FROM kv").fetchall()
+    assert ("rollback",) not in calls                      # read inside a pending write: stays in that transaction
+    pg.commit()
+    assert calls[-1] == ("commit",) and pg._dirty is False

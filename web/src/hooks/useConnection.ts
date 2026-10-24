@@ -14,7 +14,8 @@ function describe(q: { isPending: boolean; isError: boolean; error: unknown; dat
 
 /** Real health checks against both services, through the same proxy the pages use. */
 export function useConnection() {
-  const opts = { refetchInterval: 5000, retry: false, staleTime: 0 } as const;
+  // Every 30 s, not 5: on the hosted services each poll is a request to a shared edge that rate-limits (HTTP 429) bursts.
+  const opts = { refetchInterval: 30_000, retry: false, staleTime: 0 } as const;
   const engine = useQuery({ queryKey: ["health", "engine"], queryFn: api.engineHealth, ...opts });
   const agent = useQuery({ queryKey: ["health", "agent"], queryFn: api.agentHealth, ...opts });
   return {
