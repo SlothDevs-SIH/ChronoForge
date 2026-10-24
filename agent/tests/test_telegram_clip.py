@@ -47,6 +47,7 @@ def test_audit_never_contains_raw_chat_id():
 
 def test_webhook_secret_and_rerun(monkeypatch):
     client = TestClient(app)
+    monkeypatch.setattr(agent, "run_in_background", lambda run_id: None)
     monkeypatch.setattr(config, "TELEGRAM_WEBHOOK_SECRET", "s3")
     assert client.post("/channels/telegram/webhook", json=update(1, "2")).status_code == 403
     asked("t1", 1)

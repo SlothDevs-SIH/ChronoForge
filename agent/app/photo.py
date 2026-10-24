@@ -35,7 +35,10 @@ def load_image(ref: str) -> Image.Image:
         r = httpx.get(ref, timeout=10, follow_redirects=True)
         r.raise_for_status()
         return Image.open(io.BytesIO(r.content))
-    return Image.open(ref.removeprefix("file://"))
+    path = Path(ref.removeprefix("file://"))
+    if not path.is_absolute() and not path.exists():   # Engine fixtures use repo-relative paths (demo/photos/...)
+        path = config.REPO_ROOT / path
+    return Image.open(path)
 
 
 def _to_deg(value) -> float:

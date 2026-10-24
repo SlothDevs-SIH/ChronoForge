@@ -21,6 +21,7 @@ def test_parse_whatsapp_payload():
 
 
 def test_whatsapp_round_trip_and_channel_isolation(monkeypatch):
+    monkeypatch.setattr(agent, "run_in_background", lambda run_id: None)
     client = TestClient(app)
     telegram.register_contact("t1", "9190", "mr", channel="whatsapp")
     sent = []
@@ -82,3 +83,20 @@ def test_demo_photo_set_has_labelled_planted_failures(tmp_path):
     assert all(v == "contradicts_fix" for v in results["reused"])
     assert all(v == "contradicts_fix" for v in results["shifted_gps"])
     assert all(v == "contradicts_fix" for v in results["stale_time"])
+
+
+def test_whatsapp_send_text_and_template_shape(monkeypatch):
+    monkeypatch.setattr(config, "WHATSAPP_TOKEN", "tok")
+    monkeypatch.setattr(config, "WHATSAPP_PHONE_NUMBER_ID", "123")
+    sent = []
+
+    class R:
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(httpx, "post", lambda url, **kw: sent.append((url, kw)) or R())
+    whatsapp.send_text("9190", "hi")
+    whatsapp.send_template("9190")
+    assert sent[0][0].endswith("/123/messages") and sent[0][1]["json"]["type"] == "text"
+    assert sent[1][1]["json"]["template"]["name"] == "hello_world"
+    assert sent[0][1]["headers"]["Authorization"] == "Bearer tok"

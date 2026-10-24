@@ -23,7 +23,7 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [x] Audit chain (hash-linked) and `/audit/verify`
 - [x] Photo verifier: add CLIP ViT-B/32 (scene presence, before/after) (code + tests done; real model run still to try)
 - [x] Call Soham's real Engine score (verified live against his Engine, fixtures mode)
-- [x] Demo photo set with planted failures (synthetic placeholders via `experiments/make_demo_photos.py`; swap in real photos)
+- [x] Demo photo set: real open-licence Commons photos + planted failures (demo/photos, ATTRIBUTION.md); synthetic only for streetlight/drain and EXIF
 - [ ] **Milestone:** agent runs on a real scored ticket
 
 ## Phase 3: Citizen channel

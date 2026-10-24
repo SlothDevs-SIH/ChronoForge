@@ -1,5 +1,6 @@
 """Single config file for thresholds, budget and tool costs (contract section 3)."""
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -24,6 +25,7 @@ TOOL_COSTS = {
 CORRELATED_PAIRS = [{"photo", "citizen"}]
 CORRELATION_WEIGHT = 0.7
 
+REPO_ROOT = Path(os.getenv("REPO_ROOT", Path(__file__).resolve().parents[2]))
 ENGINE_URL = os.getenv("ENGINE_URL", "http://localhost:8001")
 DB_PATH = os.getenv("AGENT_DB", "agent.db")
 STEP_DELAY = float(os.getenv("STEP_DELAY", "0.4"))   # seconds between steps, for a visible live trace

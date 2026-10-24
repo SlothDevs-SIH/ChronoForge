@@ -29,3 +29,16 @@ def parse_payload(payload: dict) -> list[dict]:
                             .get("title", ""))
                 out.append({"wa_id": m.get("from", ""), "text": text, "has_photo": kind == "image"})
     return out
+
+
+def send_template(wa_id: str, name: str = "hello_world", lang: str = "en_US") -> None:
+    """Open a conversation with a pre-approved template. Free text only works inside the 24 h window that starts
+    when the user messages us, so the first business-initiated message must be a template (the test number comes
+    with `hello_world`)."""
+    if not (config.WHATSAPP_TOKEN and config.WHATSAPP_PHONE_NUMBER_ID):
+        raise RuntimeError("WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID not set")
+    r = httpx.post(f"https://graph.facebook.com/v20.0/{config.WHATSAPP_PHONE_NUMBER_ID}/messages",
+                   headers={"Authorization": f"Bearer {config.WHATSAPP_TOKEN}"},
+                   json={"messaging_product": "whatsapp", "to": wa_id, "type": "template",
+                         "template": {"name": name, "language": {"code": lang}}}, timeout=10)
+    r.raise_for_status()
