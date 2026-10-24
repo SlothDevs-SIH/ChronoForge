@@ -32,6 +32,8 @@ Rules: never commit `.env` or API keys. Never change a file in `contract/` witho
 
 ## The four phases
 
+**Phase 1 status (24 Oct): done.** We have real Mumbai data (121k complaints with coordinates and closing times), real Bengaluru data 2020 to 2025 (767k tickets, ward level only), synthetic Pune on real Pune geography, and a fictional Sandbox City. Read `data/README.md` for the columns, the quirks and the table of plan changes. Biggest change: the plain "repeat complaint after closure" label does not work (see README), so Phase 3 needs a better label.
+
 ### Phase 1: Get the data (now to about 11:30)
 Goal: real complaint data on my laptop and a list of its columns.
 
