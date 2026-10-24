@@ -57,3 +57,10 @@ TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
+
+# Sign-in and roles. Tokens are HMAC-signed with AUTH_SECRET; set it in production or sessions end on every restart.
+AUTH_SECRET = os.getenv("AGENT_AUTH_SECRET", "")
+AUTH_ENFORCE = os.getenv("AGENT_AUTH_ENFORCE", "1") == "1"   # 0 = open API, for the old laptop demo only
+AUTH_TOKEN_HOURS = int(os.getenv("AGENT_AUTH_TOKEN_HOURS", "12"))
+FIRST_ADMIN_EMAIL = os.getenv("AGENT_FIRST_ADMIN_EMAIL", "")      # seeds one admin at startup if no admin exists
+FIRST_ADMIN_PASSWORD = os.getenv("AGENT_FIRST_ADMIN_PASSWORD", "")

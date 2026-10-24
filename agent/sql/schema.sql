@@ -56,3 +56,18 @@ CREATE TABLE IF NOT EXISTS kv (
   k TEXT PRIMARY KEY,
   v TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS users (
+  user_id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  pw_hash TEXT NOT NULL,         -- scrypt, see app/auth.py
+  role TEXT NOT NULL,            -- citizen | officer | admin (server-side only, never taken from the client after sign-up)
+  status TEXT NOT NULL,          -- active | pending (officer awaiting admin approval) | disabled
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS user_tickets (
+  user_id TEXT NOT NULL,
+  ticket_id TEXT NOT NULL,
+  added_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, ticket_id)
+);

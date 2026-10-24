@@ -12,6 +12,7 @@ from app import config, db  # noqa: E402
 def fresh_db():
     db.reset(":memory:")
     config.STEP_DELAY = 0
+    config.AUTH_ENFORCE = False   # older suites call officer endpoints directly; test_auth.py turns it on
     config.OUTCOME_CHECK_DELAY = 0
     config.USE_STUBS = True
     # a developer's real .env must never make a test message a real chat or call a real LLM

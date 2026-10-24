@@ -11,7 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from pydantic import BaseModel
 
-from . import agent, approvals, audit, config, llm, llm_planner, telegram, tools, whatsapp
+from . import agent, approvals, audit, auth, config, llm, llm_planner, telegram, tools, whatsapp
 from .db import get_conn, lock
 from .models import DecideRequest, PhotoRequest
 from .photo import PhotoIndex, check_ref_allowed, verify_photo
@@ -171,7 +171,7 @@ def whatsapp_webhook(payload: dict):
     return {"ok": True, "run_ids": run_ids}
 
 
-@app.post("/agent/run/{ticket_id}")
+@app.post("/agent/run/{ticket_id}", dependencies=[Depends(auth.require_role("officer", "admin"))])
 def run_ticket(ticket_id: str):
     run_id = agent.start_run(ticket_id)
     agent.run_in_background(run_id)
@@ -219,12 +219,12 @@ def get_run(run_id: str):
             "trace": json.loads(r["trace"]), "verdict": json.loads(r["verdict"]) if r["verdict"] else None}
 
 
-@app.get("/approvals")
+@app.get("/approvals", dependencies=[Depends(auth.require_role("officer", "admin"))])
 def list_approvals(status: str | None = "pending"):
     return approvals.list_approvals(status)
 
 
-@app.post("/approvals/{approval_id}/decide", dependencies=[Depends(require_admin)])
+@app.post("/approvals/{approval_id}/decide", dependencies=[Depends(require_admin), Depends(auth.require_role("officer", "admin"))])
 def decide(approval_id: str, req: DecideRequest):
     try:
         return approvals.decide(approval_id, req.decision, req.note)
@@ -234,12 +234,12 @@ def decide(approval_id: str, req: DecideRequest):
         raise HTTPException(409, str(exc))
 
 
-@app.get("/outcomes")
+@app.get("/outcomes", dependencies=[Depends(auth.require_role("officer", "admin"))])
 def outcomes():
     return approvals.outcomes()
 
 
-@app.get("/audit")
+@app.get("/audit", dependencies=[Depends(auth.require_role("officer", "admin"))])
 def get_audit(limit: int = 500):
     return audit.entries(limit)
 
@@ -247,3 +247,82 @@ def get_audit(limit: int = 500):
 @app.get("/audit/verify")
 def verify_audit():
     return audit.verify()
+
+
+class RegisterRequest(BaseModel):
+    email: str
+    name: str
+    password: str
+    role: str = "citizen"
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class StatusRequest(BaseModel):
+    status: str
+
+
+class TicketRef(BaseModel):
+    ticket_id: str
+
+
+@app.on_event("startup")
+def seed_first_admin():
+    auth.seed_admin()
+
+
+@app.post("/auth/register")
+def register(req: RegisterRequest):
+    try:
+        return auth.register(req.email, req.name, req.password, req.role)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/auth/login")
+def login(req: LoginRequest):
+    try:
+        return auth.login(req.email, req.password)
+    except PermissionError as exc:
+        raise HTTPException(401, str(exc))
+
+
+@app.get("/auth/me")
+def me(user=Depends(auth.current_user)):
+    if user is None:
+        raise HTTPException(401, "sign in required")
+    return user
+
+
+@app.get("/admin/users")
+def admin_users(_=Depends(auth.require_role("admin"))):
+    return auth.list_users()
+
+
+@app.post("/admin/users/{user_id}/status")
+def admin_set_status(user_id: str, req: StatusRequest, _=Depends(auth.require_role("admin"))):
+    if req.status not in ("active", "disabled"):
+        raise HTTPException(400, "status must be active or disabled")
+    try:
+        return auth.set_status(user_id, req.status)
+    except KeyError:
+        raise HTTPException(404, "unknown user")
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+
+
+@app.get("/me/tickets")
+def my_tickets(user=Depends(auth.require_role("citizen"))):
+    return auth.my_tickets(user["user_id"])
+
+
+@app.post("/me/tickets")
+def add_my_ticket(req: TicketRef, user=Depends(auth.require_role("citizen"))):
+    try:
+        auth.add_ticket(user["user_id"], req.ticket_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return auth.my_tickets(user["user_id"])
