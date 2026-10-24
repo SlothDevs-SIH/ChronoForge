@@ -48,9 +48,9 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [ ] **Milestone:** full demo
 
 ## Phase 6: Calibration and polish
-- [ ] Calibrate likelihood ratios on `data/benchmark_v1.parquet`
-- [ ] Cost-vs-accuracy experiment (harness done on stub data; needs real benchmark numbers)
-- [ ] Dockerfile / docker-compose (written, not built: no Docker here); deploy still to do
+- [ ] Calibrate likelihood ratios: NOT meaningful yet. Soham's benchmark is synthetic injection (caught by construction), so hand-set LRs stay and are labelled as such
+- [x] Cost-vs-accuracy harness on real tools over the 12-ticket demo set (illustration, not a result): experiments/cost_demo_set.py
+- [x] Dockerfile builds from repo root (written, not built: no Docker here); deploy deliberately not done yet
 - [x] (stretch) DINOv2-small second embedding (code + tests; real model not downloaded yet)
 - [x] (stretch) Skeptic call on final verdict (AGENT_USE_SKEPTIC=1)
 - [x] (stretch) Voice notes via hosted API (Gemini audio, not Whisper; code + tests)

@@ -105,7 +105,7 @@ class PhotoIndex:
 def verify_photo(ticket_id: str, closure_photo: str, ticket: dict | None = None,
                  index: PhotoIndex | None = None, cost: int = 1, use_clip: bool | None = None,
                  complaint_photo: str | None = None, embedder=None, use_dino: bool | None = None,
-                 dino_embedder=None) -> Evidence:
+                 dino_embedder=None, use_vision: bool | None = None, vision_judge=None) -> Evidence:
     """ticket may carry lat, lng, closed_at (ISO). Missing fields skip the matching check."""
     ticket = ticket or {}
     index = index if index is not None else PhotoIndex()
@@ -147,6 +147,18 @@ def verify_photo(ticket_id: str, closure_photo: str, ticket: dict | None = None,
             details["checks"].update(cd)
         except Exception as exc:   # model missing or unreadable photo: keep v1 checks, say so
             details["clip_error"] = type(exc).__name__
+
+    if (config.USE_VISION_LLM if use_vision is None else use_vision) and ticket.get("category"):
+        try:
+            from . import vision_check
+            before = complaint_photo or ticket.get("complaint_photo_url")
+            kw = {"judge_fn": vision_judge} if vision_judge else {}
+            vf, vp, vd = vision_check.vision_checks(img, ticket["category"], load_image(before) if before else None, **kw)
+            flags += [f for f in vf if f not in flags]
+            passed += [p_ for p_ in vp if p_ not in passed and p_ not in flags]
+            details["checks"].update(vd)
+        except Exception as exc:
+            details["vision_error"] = type(exc).__name__
 
     if config.USE_DINO if use_dino is None else use_dino:
         try:

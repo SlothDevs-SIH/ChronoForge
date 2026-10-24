@@ -34,6 +34,7 @@ PHOTO_INDEX_PATH = os.getenv("PHOTO_INDEX", "data/photo_index.json")
 USE_STUBS = os.getenv("AGENT_USE_STUBS", "1") == "1"  # stub tools until real services are wired
 USE_CLIP = os.getenv("AGENT_USE_CLIP", "0") == "1"    # needs torch + open_clip_torch and a ~400 MB download
 USE_SKEPTIC = os.getenv("AGENT_USE_SKEPTIC", "0") == "1"
+USE_VISION_LLM = os.getenv("AGENT_USE_VISION_LLM", "0") == "1"   # sends photos to Gemini: demo photos only
 USE_DINO = os.getenv("AGENT_USE_DINO", "0") == "1"      # DINOv2-small before/after matching (needs transformers + torch)
 USE_LLM_PLANNER = os.getenv("AGENT_USE_LLM_PLANNER", "0") == "1"
 

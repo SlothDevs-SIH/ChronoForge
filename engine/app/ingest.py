@@ -11,6 +11,7 @@ import pandas as pd
 
 from .connectors.base import ComplaintSource
 from .connectors.bengaluru import BengaluruSource
+from .connectors.demo import DemoSource
 from .connectors.mumbai import MumbaiSource
 from .connectors.synthetic import SyntheticSource
 
@@ -20,16 +21,18 @@ SOURCES = {
     "bengaluru": lambda: BengaluruSource(DATA / "raw", DATA / "processed" / "bengaluru_ward_name_map.csv"),
     "pune": lambda: SyntheticSource(DATA / "processed" / "synthetic_pune.csv", "pune"),
     "synthetic": lambda: SyntheticSource(DATA / "processed" / "synthetic_city.csv", "synthetic"),
+    "demo": lambda: DemoSource(),   # the labelled demo photo set; own file so it never clobbers Sandbox City
 }
 
 
 def ingest(source: ComplaintSource, out_dir: Path = DATA / "warehouse") -> pd.DataFrame:
     out_dir.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(list(source.tickets()))
-    df.to_parquet(out_dir / f"tickets_{source.city}.parquet", index=False)
+    stem = getattr(source, "file_stem", source.city)
+    df.to_parquet(out_dir / f"tickets_{stem}.parquet", index=False)
     if source.truth:
-        pd.DataFrame(source.truth).to_parquet(out_dir / f"truth_{source.city}.parquet", index=False)
-    (out_dir / f"tickets_{source.city}.report.json").write_text(
+        pd.DataFrame(source.truth).to_parquet(out_dir / f"truth_{stem}.parquet", index=False)
+    (out_dir / f"tickets_{stem}.report.json").write_text(
         json.dumps(dict(source.report), indent=2, sort_keys=True), encoding="utf-8")
     return df
 

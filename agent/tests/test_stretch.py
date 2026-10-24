@@ -136,3 +136,25 @@ def test_no_conclusive_check_means_cannot_tell(monkeypatch):
         ticket_id=tid, check="citizen", verdict="inconclusive", likelihood_ratio=1.0, confidence=0.0, cost=0))
     v = agent.execute(agent.start_run("T-inconclusive"), delay=0)
     assert v.state == "cannot_tell" and v.recommended_action == "human_spot_check"
+
+
+def test_vision_llm_check_flags_a_still_broken_scene(tmp_path):
+    from app import vision_check
+    from tests.test_stretch import solid
+    a = tmp_path / "a.png"
+    solid((9, 9, 9)).save(a)
+    judge = lambda cat, closure, complaint: vision_check.VisionReply(problem_still_visible=True,
+                                                                     same_place_as_complaint=True, note="pothole")
+    ev = photo.verify_photo("t", str(a), {"category": "pothole"}, photo.PhotoIndex(str(tmp_path / "i.json")),
+                            use_clip=False, use_vision=True, vision_judge=judge)
+    assert ev.verdict == "contradicts_fix" and "scene" in ev.details["flags"]
+    assert ev.details["checks"]["vision_llm"]["judged_by"] == "LLM, not a measurement"
+
+
+def test_vision_llm_is_off_by_default(tmp_path):
+    from tests.test_stretch import solid
+    a = tmp_path / "a.png"
+    solid((9, 9, 9)).save(a)
+    ev = photo.verify_photo("t", str(a), {"category": "pothole"}, photo.PhotoIndex(str(tmp_path / "i.json")),
+                            use_clip=False)
+    assert "vision_llm" not in ev.details["checks"] and "vision_error" not in ev.details
