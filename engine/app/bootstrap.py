@@ -19,8 +19,10 @@ import httpx
 
 
 def warehouse_dir() -> Path:
-    from .store import WAREHOUSE_DIR
-    return WAREHOUSE_DIR
+    # Same rule as store.WAREHOUSE_DIR, but NOT imported from there: importing app.store builds the store at once, and
+    # at this point the warehouse has not been downloaded yet, so the service would stay stuck in fixtures mode.
+    root = Path(__file__).resolve().parents[2]
+    return Path(os.environ.get("WAREHOUSE_DIR", root / "data" / "warehouse"))
 
 
 def has_warehouse(directory: Path) -> bool:
