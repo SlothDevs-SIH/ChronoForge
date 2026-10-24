@@ -7,6 +7,7 @@ adapter below lets every existing call site keep using `get_conn().execute("... 
 import re
 import sqlite3
 import threading
+import time
 from pathlib import Path
 from . import config
 
@@ -99,6 +100,16 @@ def _migrate_sqlite(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _retire_old_tables(conn: sqlite3.Connection) -> None:
+    """A local database made by an earlier build of the Agent had its own `users` and an older `user_tickets` (no
+    `linked_by`). The current schema would silently keep the old table and then fail on the first insert, so the old
+    one is set aside under another name (never deleted) and the schema creates a fresh one."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(user_tickets)").fetchall()}
+    if cols and "linked_by" not in cols:
+        conn.execute(f"ALTER TABLE user_tickets RENAME TO user_tickets_old_{int(time.time())}")
+        conn.commit()
+
+
 def get_conn():
     global _conn
     if _conn is None:
@@ -107,6 +118,7 @@ def get_conn():
         else:
             _conn = sqlite3.connect(config.DB_PATH, check_same_thread=False)
             _conn.row_factory = sqlite3.Row
+            _retire_old_tables(_conn)
             _conn.executescript(_SCHEMA.read_text())
             _migrate_sqlite(_conn)
     return _conn
