@@ -93,7 +93,7 @@ class PhotoIndex:
                 continue
             d = h - imagehash.hex_to_hash(rec["phash"])
             if best_d is None or d < best_d:
-                best, best_d = tid, d
+                best, best_d = tid, int(d)
         return best, best_d
 
     def add(self, ticket_id: str, h: dict) -> None:
@@ -169,5 +169,6 @@ def verify_photo(ticket_id: str, closure_photo: str, ticket: dict | None = None,
     else:
         lr, verdict, conf = 1.0, "inconclusive", 0.2
     details["flags"], details["passed"] = flags, passed
+    index.add(ticket_id, h)   # remember this closure photo so later tickets can be compared against it
     return Evidence(ticket_id=ticket_id, check="photo", verdict=verdict, likelihood_ratio=lr,
                     confidence=conf, cost=cost, details=details)

@@ -68,3 +68,25 @@ def test_no_exif_no_index_is_inconclusive(tmp_path):
 def test_haversine_known_distance():
     # one degree of latitude is about 111.2 km
     assert abs(photo.haversine_m(0, 0, 1, 0) - 111195) < 200
+
+
+def test_photo_hashes_are_remembered_so_a_later_ticket_is_flagged(tmp_path):
+    """No manual index.add: verify_photo itself must record each closure photo."""
+    idx = photo.PhotoIndex(str(tmp_path / "idx.json"))
+    a = make_img(tmp_path / "a.jpg", 7)
+    first = photo.verify_photo("ticket-1", a, TICKET, idx)
+    assert "duplicate" not in first.details["flags"]
+    second = photo.verify_photo("ticket-2", a, TICKET, photo.PhotoIndex(str(tmp_path / "idx.json")))
+    assert "duplicate" in second.details["flags"]
+    # re-checking the same ticket is not a duplicate of itself
+    again = photo.verify_photo("ticket-1", a, TICKET, photo.PhotoIndex(str(tmp_path / "idx.json")))
+    assert again.details["checks"]["duplicate"]["nearest_ticket"] == "ticket-2"
+
+
+def test_evidence_with_a_nearest_neighbour_serialises_to_json(tmp_path):
+    """imagehash distances are numpy ints; the Evidence must still dump to JSON (it is stored and streamed)."""
+    idx = photo.PhotoIndex(str(tmp_path / "idx.json"))
+    photo.verify_photo("t1", make_img(tmp_path / "a.jpg", 1), TICKET, idx)
+    ev = photo.verify_photo("t2", make_img(tmp_path / "b.jpg", 2), TICKET, idx)
+    assert isinstance(ev.details["checks"]["duplicate"]["hamming"], int)
+    assert ev.model_dump_json()

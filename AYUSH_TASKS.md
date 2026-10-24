@@ -44,7 +44,7 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [x] LLM-chosen tool calls with schema validation, one retry, then fallback
 - [x] Guardrail tests (ineligible tool, budget, `propose_action` only path, hashed IDs)
 - [x] Fallback tested with network off (simulated in tests)
-- [ ] WhatsApp Cloud round trip (code + tests done; needs Meta credentials)
+- [ ] WhatsApp Cloud round trip (code + tests done; PARKED: Meta "Claim test number" fails with a generic error; retry later)
 - [ ] **Milestone:** full demo
 
 ## Phase 6: Calibration and polish
@@ -56,8 +56,8 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [x] (stretch) Voice notes via hosted API (Gemini audio, not Whisper; code + tests)
 
 ## Phase 7: Freeze
-- [ ] Offline-mode rehearsal
-- [ ] Interface checklist passes (see `backend_ayush.md` section 12)
+- [x] Offline-mode rehearsal (experiments/rehearsal.py passes against the Engine; re-run after Soham's warehouse lands)
+- [x] Interface checklist passes (tests/test_interface.py; benchmark path item waits on Soham)
 - [ ] Code freeze
 
 ## Working rules
