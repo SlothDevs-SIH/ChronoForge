@@ -1,6 +1,6 @@
 # Deploy steps (Render, Supabase, Vercel)
 
-> Render's free `onrender.com` address was rate-limiting the site and the free instance kept restarting. The recommended host for the Engine and Agent is now Hugging Face Spaces: follow `deploy/huggingface/README.md` for sections 2 and 3 below. Section 1 (Supabase) and the first-sign-in notes still apply.
+> Render's free `onrender.com` address was rate-limiting the site and the free instance kept restarting. The chosen host for the Engine and Agent is now Google Cloud Run: follow `deploy/cloudrun/README.md` for sections 2 and 3 below. (Hugging Face Docker Spaces now need a paid PRO plan; the files in `deploy/huggingface/` still work if you subscribe.) Section 1 (Supabase) and the first-sign-in notes still apply.
 
 You do the account and database steps; nothing here is run for you. Variable names come from `contract/AUTH_AND_DEPLOY.md`, `agent/.env.example` and `engine/.env.example`. Never paste a real secret into git or into chat.
 

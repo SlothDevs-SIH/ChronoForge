@@ -1,6 +1,6 @@
 # Run the Engine and Agent on Hugging Face Spaces
 
-Free, no credit card, 2 vCPU and 16 GB of memory per Space. Each Space is a Docker Space that holds only a `Dockerfile` and a
+**Docker Spaces on free hardware now require a Hugging Face PRO subscription** (checked 25 Oct). With PRO: 2 vCPU and 16 GB of memory per Space. Each Space is a Docker Space that holds only a `Dockerfile` and a
 `README.md`; the code is pulled from the public GitHub repo (branch `main`) when the Space builds. You create the
 account and the Spaces; nothing here is run for you.
 

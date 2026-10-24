@@ -13,3 +13,7 @@ data/warehouse/
 
 engine/.pytest_tmp/
 .pytest_tmp/
+
+# Cloud Run environment files hold real secrets
+deploy/cloudrun/*.env.yaml
+!deploy/cloudrun/*.env.example.yaml

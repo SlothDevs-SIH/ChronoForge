@@ -1,0 +1,10 @@
+# Builds engine/Dockerfile (its build context is the repo root) and pushes the image. Run from the repo root:
+#   gcloud builds submit --config deploy/cloudrun/cloudbuild-engine.yaml --substitutions _IMAGE=REGION-docker.pkg.dev/PROJECT_ID/trueclose/engine .
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "engine/Dockerfile", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
+substitutions:
+  _IMAGE: "REGION-docker.pkg.dev/PROJECT_ID/trueclose/engine"
+options:
+  logging: CLOUD_LOGGING_ONLY

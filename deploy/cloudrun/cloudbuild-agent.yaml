@@ -1,0 +1,10 @@
+# Builds agent/Dockerfile (its build context is the repo root) and pushes the image. Run from the repo root:
+#   gcloud builds submit --config deploy/cloudrun/cloudbuild-agent.yaml --substitutions _IMAGE=REGION-docker.pkg.dev/PROJECT_ID/trueclose/agent .
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "agent/Dockerfile", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
+substitutions:
+  _IMAGE: "REGION-docker.pkg.dev/PROJECT_ID/trueclose/agent"
+options:
+  logging: CLOUD_LOGGING_ONLY
