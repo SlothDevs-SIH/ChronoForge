@@ -59,29 +59,45 @@ Why it is "agentic" and not just a pipeline:
 
 | Check | What it does | Limit |
 |---|---|---|
-| **Closure score** (ML) | Reads the ticket's data (repeat complaints nearby, how fast it closed, closing time of day, officer batch closing) and gives a probability that the closure is false, with plain reasons | Learned from a proxy label, not true ground truth |
+| **Closure score** (ML) | Bengaluru: a rank score from category, sub-category, ward workload and ward history. Mumbai: one flag, "closed with no attended photo". Synthetic cities: a calibrated probability. Each ticket carries plain reasons | Learned from proxy labels, not true ground truth. See section 6A for what each number means |
 | **Photo check** | Examines the closure photo: reused image? taken near the place and time? does it still show the problem? same place as the original complaint photo? | Public data has no closure photos, so the demo uses a labelled demo photo set |
-| **Satellite check** | Compares before/after Sentinel-2 images (10 m per pixel) around the site, against similar nearby places to rule out seasonal change | Cannot see small things like potholes; the agent skips these at zero cost and says so. Runs live on AWS Earth Search; a pre-fetched cache is the fallback and is badged `cached` |
+| **Satellite check** | Compares before/after Sentinel-2 images (10 m per pixel) around the site, against similar nearby places to rule out seasonal change | Only for large-area problems (dump sites, nullah corridors, waterlogging over hundreds of metres, large encroachment). Potholes and single garbage piles are "not applicable": the agent skips them at zero cost and says why. Runs live on AWS Earth Search; a pre-fetched cache is the fallback and is badged `cached` |
 | **Citizen check** | Messages the original complainant "Was it fixed?" and reads the reply in English, Hindi, Marathi or Kannada | No reply is weak evidence, never treated as satisfaction |
 
 ## 6. The ML and AI in plain language
 
-**A. Closure-integrity scorer (tabular ML)**
-- Models: **LightGBM** plus **logistic regression**, averaged into an **ensemble**, then **calibrated** (so "70%" really means about 70 in 100) with isotonic regression.
-- Explanations: **SHAP** turns the model's reasoning into sentences like "3 repeat complaints at this spot in 14 days; closed in 4 minutes".
-- Why two models: LightGBM is more accurate; logistic regression is simple and explainable. Averaging usually beats either, and we will show all three results side by side. If the ensemble does not win on the test split we say so and use the better one.
-- Features include repeat complaints in the same ~100 m hexagon (H3 index), time to close vs category median, closing hour, officer batch-closing share, ward closing velocity, category base rate, empty closure notes.
-- Training label: a ticket counts as a probable false closure if someone complained again at the same place and category within 14 days **after** closure. This is a **proxy**, and we say so. Evaluated with a time-based split (train on earlier months, test on later ones).
+**A. Closure-integrity scorer (tabular ML), as built, with the measured results**
+There is no ground-truth "false closure" label in public data, so the scorer works differently in each data regime. This section replaces the earlier plan. The numbers are from `data/models/*.metrics.json`.
+
+| Data | What we ship | What the number means |
+|---|---|---|
+| **Bengaluru** (real, ward level) | A trained **LightGBM + logistic regression** pair. A rule fixed in advance ships whichever has the best validation score: validation could not separate them (0.734 to 0.737), so **LightGBM shipped, and it is the weakest of the three on the test slice** (logistic 0.64, blend 0.61, LightGBM 0.60). Label: the citizen **reopened** the closure. | A **rank score**, not a probability. Test AUROC about **0.60 to 0.64** (95% CI roughly 0.57 to 0.67); the top 10% of scores hold about **30 to 33% of reopens** (about 3x lift). Category alone gives 0.61. |
+| **Mumbai** (real, exact location) | **No trained model.** One rule flag: closed with **no attended photo** (only the citizen's own). | Density-adjusted odds ratio **2.1** (95% CI 1.6 to 2.9; 1.0 to 3.6 on held-out months) that a repeat complaint follows. Small sample (355 tickets). A "closed in under 10 minutes" flag showed **no** effect and is not used. |
+| **Pune and Sandbox City** (synthetic) | Trained LightGBM + logistic, isotonic-calibrated, label = injected ground truth. | AUROC about **0.98** on later months and on an unseen city, **because we injected the failures**. Always say "synthetic injection". |
+
+Plain-language findings to use in the deck (all measured on our data):
+- **Two leakage traps in Bengaluru's data.** When a ticket is reopened, its staff remark is overwritten ("citizen not satisfied") and it is re-assigned to a senior officer. So remark text and staff role both *reveal* the label. A lookup on staff role alone scored AUROC 0.965, which looked great and was meaningless. We excluded both. Without them the signal is modest, and we report that.
+- **The reopen label only exists recently.** Reopen rate is 0.02% in 2020 and about 1.5% in 2025, so the reopen mechanism appears around 2024. We train only on tickets from October 2024 onward, and score older tickets with the neutral 0.5.
+- **The Mumbai repeat-complaint label mostly measures how crowded a spot is.** A model using only density reaches AUROC 0.80, and adding every closure feature gives 0.80 again. So we do not ship a Mumbai model, and we are open about why.
+- **How the scores reach the agent.** The agent's prior is `p_false_closure`. For real cities it is a *bounded prior* (0.30 to 0.70 for Bengaluru by rank; 0.68 for the Mumbai flag, otherwise 0.5), so evidence decides. Only the synthetic cities carry a calibrated probability (clipped to 0.02 to 0.98).
+- **Explanations:** per-ticket **TreeSHAP** reasons from LightGBM (for example "sub-category: water stagnation, ward reopen rate 3%"), or the flag with its measured effect.
+- **Do not say:** "our model predicts false closures", "calibrated probability" for any real city, or "AUROC 0.98" without "synthetic".
 
 **B. Photo verifier**
 - **imagehash** (perceptual hashing): fingerprints that match copies of the same photo.
 - **EXIF**: location and time stored inside the photo file.
 - **CLIP** (an open image-text model): turns a photo into numbers to catch edited/cropped copies and answers "does this still show a pothole?". **DINOv2-small** may be added later for stronger same-scene matching.
 
-**C. Satellite verifier**
-- Free **Sentinel-2** images. We compute change indices (vegetation, built-up, bare soil) and a learned change score from our earlier **GEOAI-04** model (U-Net, ONNX).
-- Key rigour: compare the site's change to **control places nearby** (a z-score). Raw "change" is meaningless because everything changes with seasons.
-- Honest abstention: an eligibility table says which complaint types satellites can and cannot verify.
+**C. Satellite verifier (built, narrow by design)**
+- Free **Sentinel-2** images (10 m per pixel), read live from AWS Earth Search; a cache makes the demo work offline. Before and after images must come from the **same tile**; "before" is the latest clear scene before the complaint, "after" the earliest clear scene after the closure.
+- Key rigour: the site's change is compared with **matched control windows nearby** (places that looked similar before: same vegetation, built-up and brightness), reported as a percentile among the controls. Raw "change" is meaningless because seasons change every pixel. The statistic is undirected: it says the site changed unusually, not what changed.
+- **Large-area problems only.** One pixel is 10 m x 10 m, so a pothole or a single garbage pile is invisible. The check applies only when the complaint wording names something spanning many pixels: dump sites, nullah and drain corridors, waterlogging, large encroachment. In our Mumbai data that is **558 of 77,338 tickets (0.7%)**, 291 of them closed. Everything else shows "not applicable".
+- **Clouds.** In validation on real ticket dates (April to August, mostly monsoon), about **two thirds of attempts were cloud-obscured** and the check abstained. That is a real limit of optical satellites in Mumbai, and the product says so.
+- **How strong is the evidence?** Deliberately weak: an "unusual change" leans "fixed" (likelihood ratio 0.45) and "no unusual change" leans "not fixed" only slightly (1.25), because small works are invisible. These ratios rest on a stated assumption (a real repair changes the site by about 1.5 control spreads) and are **not validated against real repair outcomes: none exist**.
+- **What validation shows** (23 measured random locations, wide intervals): with no repair claimed, a site looked unusual 13% of the time (95% CI 3 to 34%) against 10% expected; percentiles were consistent with uniform; an injected change of 1.5 control spreads is found 40% of the time, 2 spreads 65%, 3 spreads 95%.
+- **What it found on real tickets:** (the demo-cache run: 71 closed Mumbai tickets with large-area wording, closed mid-April to end of August 2026, live reads with the fixed reader): **46 measured, 25 cloud-obscured, 0 read errors**. Of the 46 measured, **4 (9%) showed unusual change at the site, about the same as the 10 to 13% seen at random places with no repair claimed**; the median site percentile was 0.40, if anything below the controls. So in this sample the closures do not look different from random places. That does not show the work was not done: silt removal and small works are often invisible at 10 m, which is why the evidence is weak. It does mean the satellite check should not be sold as a detector of false closures.
+- **Not used:** the learned U-Net from our earlier GEOAI-04 project. It was trained on urban construction change, scores weakly in 3 of its 10 test locations and raises many farmland false alarms, so it is not valid evidence for "was this cleared". Only GEOAI-04's reading conventions are reused (see `engine/app/satellite/NOTICE.md`).
+- **Synthetic tickets:** the imagery is real but the ticket is invented, so the result is marked `demo_only` and carries no weight.
 
 **D. The agent brain (LLM)**
 - An **LLM** (a large language model such as Gemini or an OpenAI model, called over the internet) chooses the next tool, using strict JSON tool-calling. Our code enforces the budget and eligibility, and a rule-based planner takes over if the LLM or the network fails.
@@ -136,11 +152,13 @@ Tech stack: Python, FastAPI, DuckDB, Parquet, H3, GeoPandas, LightGBM, scikit-le
 
 **Research gap (draft wording):** every system we found asks the closing officer or the citizen to confirm the fix; we found none that independently verifies the closure with evidence the closer did not supply, combines several evidence types under a cost budget, and can say "can't tell". Vedashree: this is "we found none in our search", not proof of absence. Search Scholar, arXiv and GitHub to confirm, and tell the team at once if a close match exists.
 
-**Our differentiators:** independent evidence, a calibrated score that can abstain, a budgeted agent choosing the cheapest useful check, a citizen in the loop, plug-in municipal connectors, and no auto-penalty path.
+**Our differentiators:** independent evidence, a score that is honest about what it is (a rank or a bounded prior for real cities) and an agent that can abstain, a budgeted agent choosing the cheapest useful check, a citizen in the loop, plug-in municipal connectors, and no auto-penalty path.
 
 ## 11. Evaluation (what we will honestly report)
 
-- **Scorer:** AUROC, PR-AUC, Brier score, reliability curve, time-split results, baselines (category rate, one simple rule, logistic regression) vs the ensemble, with confidence intervals.
+- **Benchmark v1 (synthetic injection on 1,000 real Mumbai tickets):** 30% marked as false closures with injected symptoms. Instant closures and reused photo ids are caught (recall 1.0, by construction); a photo taken far away is caught 65% of the time (a quarter are deliberately ambiguous); false alarms on clean tickets are 0.7%. The important number: **29% of failures leave no metadata symptom at all**, so only independent evidence (satellite, citizen, human) can catch them. That gap is why the agent exists.
+- **Not usable on Mumbai: batch closing.** 28.9% of real closed tickets share a closing minute with 2 or more others closed by the same officer, often kilometres apart (bulk or desk closing), so it is normal and carries no signal. Closing **time of day** and **batch closing** are therefore NOT scorer signals here.
+- **Scorer:** AUROC with 95% intervals, PR-AUC, lift in the top 1% and 10%, baselines (constant, category rate, sub-category rate, ward history), always by time split. Bengaluru and Mumbai are real data with proxy labels; the synthetic numbers are labelled synthetic. Full numbers and caveats: `data/models/*.metrics.json`.
 - **Verifier benchmark:** 1,000 real closed tickets with injected failures (reused photo, shifted location, bulk closing, absent work). Per-check precision, recall, abstention rate, coverage. Always labelled **synthetic injection**.
 - **Agent:** cost per ticket vs "run every check on every ticket", and accuracy at equal cost.
 - **Human override rate** from the approval queue.
@@ -153,15 +171,15 @@ We claim **no real-world false-closure rate**.
 | 3-page proposal | Team | Done |
 | GEOAI-04 satellite change engine (acknowledged prior component) | Soham | Exists from an earlier project |
 | Catalyst AI FastAPI data engines (acknowledged prior component) | Soham | Exists from an earlier project |
-| City connectors (Bengaluru, Pune, Mumbai, synthetic) | Soham | Not started |
-| Scorer ensemble | Soham | Not started |
-| Satellite verifier (live STAC, cache fallback) | Soham | Not started |
-| Evaluation benchmark | Soham | Not started |
-| Photo verifier | Ayush | Not started |
-| Agent planner and fusion | Ayush | Not started |
-| Telegram channel, then WhatsApp | Ayush | Not started |
-| Approvals and audit log | Ayush | Not started |
-| Web app | Ishan | Not started |
+| City connectors (Bengaluru, Pune, Mumbai, synthetic) | Soham | **Done**: about 822,800 tickets, tested |
+| Scorer | Soham | **Done**: Bengaluru rank score (test AUROC about 0.60 to 0.64), Mumbai flag, synthetic calibrated model. Modest, honestly reported |
+| Satellite verifier (live STAC, cache fallback) | Soham | **Done**, narrow: large-area problems only, mostly cloud-limited in the monsoon; validated by placebo and injected change, not against real repairs |
+| Evaluation benchmark v1 | Soham | **Done** (synthetic injection on real tickets); agent cost-versus-accuracy still needs Ayush's real verifiers |
+| Photo verifier | Ayush | Stub on `main` (returns no information); real one not merged |
+| Agent planner and fusion | Ayush | Skeleton on `main`, tested; LLM chooser and real tools not merged |
+| Telegram channel, then WhatsApp | Ayush | Stub on `main` |
+| Approvals and audit log | Ayush | Skeleton on `main`, tested |
+| Web app | Ishan | Skeleton on `main` (triage, ticket, approvals) |
 
 ## 13. Rules for slides and the pitch
 

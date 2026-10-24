@@ -47,7 +47,25 @@ Goal: real complaint data on my laptop and a list of its columns.
 Done when: columns are posted, one real file loads, and the synthetic generator makes 1,000 tickets.
 
 **Phase 2 status: done.** All four connectors are built (Mumbai, Bengaluru, Pune, Sandbox), `python -m app.ingest all` loads about 822,800 tickets in 35 seconds, and the API now serves the real tickets from DuckDB over the Parquet files (starts in about 4 seconds; most queries about 0.4 s, a status filter over all of Bengaluru about 2 s). 69 engine tests and 10 agent tests pass. The Agent ran end to end on a real Mumbai ticket. To run it: `cd engine && python -m app.ingest all`, then start the Engine; `/health` shows `mode: warehouse`.
-Honest limits until Phase 3: scores are the neutral baseline 0.5, `honest_rate` is null, and the satellite check is a stub (eligibility is real). Phase 3 is the scorer.
+Honest limits: `honest_rate` is still null and the satellite check is a stub (eligibility is real).
+
+**Phase 3 status (scorer): built, with honest results.** Run `cd engine && python -m app.scorer.train all` (about 1 minute). Findings, in the order we hit them:
+1. Bengaluru's reopen label is **leaked by two columns**: the remark and the staff role are both overwritten when a ticket is reopened. A staff-role lookup scored AUROC 0.965 and meant nothing. Both are excluded.
+2. The reopen mechanism only exists from about 2024, so we train only from October 2024.
+3. A time-unit bug (microseconds read as seconds) made every 30-day window decades long. Fixed in `core.epoch_seconds` and covered by tests; the first results were discarded.
+4. Bengaluru test AUROC is about 0.60 to 0.64 (top 10% of scores hold about a third of reopens). A rank score, not a probability; calibration made it worse.
+5. Mumbai's repeat label is mostly crowding (density-only AUROC 0.80, everything 0.80). No model; one flag, `citizen_image_only`, with density-adjusted OR 2.1 (CI 1.6 to 2.9).
+6. Synthetic cities score AUROC 0.98 because we injected the failures; labelled as such.
+Numbers and caveats: `data/models/*.metrics.json`.
+
+**Phase 4 status (satellite verifier and benchmark): built. Deployment deliberately NOT done**: we wait for Ayush's backend, then integrate on the `integration` branch, then build the real frontend. What happened:
+1. The satellite verifier works end to end on real Sentinel-2 (live check 20 to 40 s; a cache serves the demo). Method and numbers: `data/README.md` ("Satellite verifier").
+2. **It applies to very few tickets**: only large-area wording (558 of 77,338 Mumbai tickets; the demo cache covers 71 of them), and cloud blocks 35% of attempts on those tickets (about two thirds in the validation sample, which had more monsoon dates). On the 71 real eligible tickets, 46 were measured and only 4 (9%) showed unusual change, about the same as random places with no repair claimed: the check does not separate closures from random places, so it must not be sold as a false-closure detector. Its evidence is deliberately weak (likelihood ratios 0.45 and 1.25) and not validated against real repairs, because none exist.
+3. The validation lost 26% of its runs to **network read errors that were our own load bug**. Fixed (global connection cap, longer retries, no caching of failures); not re-run. Only 23 locations were measured, so the intervals are wide.
+4. I did **not** use GEOAI-04's learned model: it detects urban construction change and is not valid evidence for "was this dump site cleared".
+5. **Batch closing is normal in Mumbai** (29% of real tickets share a closing minute with 2+ others of the same officer, often kilometres apart), so it is not a signal and was removed. The proposal's "batch patterns" should not be claimed for Mumbai.
+6. Benchmark v1 (synthetic injection on 1,000 real tickets): symptoms are caught by construction, but **29% of failures have no metadata symptom** and need independent evidence.
+Next: wait for Ayush's backend, integrate, then the frontend. Open: agent cost-versus-accuracy needs his real verifiers.
 
 ### Phase 2: Backend part 1, real data in the API (about 11:30 to 13:30)
 Goal: Ishan sees real tickets on his screen instead of fixtures.

@@ -1,0 +1,83 @@
+{
+  "model": "mum-flags-v1",
+  "score_type": "rule_flags",
+  "data_quality": "real (proxy label)",
+  "label": "a repeat complaint of the same category in the same ~100 m cell, 24 h to 14 days after closure (proxy)",
+  "flag_effects": {
+    "citizen_image_only": {
+      "all_months": {
+        "n_flagged": 355,
+        "observed_repeat_rate": 0.814,
+        "overall_repeat_rate": 0.568,
+        "odds_ratio_density_adjusted": 2.11,
+        "odds_ratio_ci95": [
+          1.58,
+          2.86
+        ]
+      },
+      "held_out_aug_onward": {
+        "n_flagged": 139,
+        "observed_repeat_rate": 0.914,
+        "overall_repeat_rate": 0.6,
+        "odds_ratio_density_adjusted": 2.12,
+        "odds_ratio_ci95": [
+          1.04,
+          3.55
+        ]
+      }
+    },
+    "fast_close": {
+      "all_months": {
+        "n_flagged": 43,
+        "observed_repeat_rate": 0.791,
+        "overall_repeat_rate": 0.568,
+        "odds_ratio_density_adjusted": 0.99,
+        "odds_ratio_ci95": [
+          0.5,
+          1.02
+        ]
+      },
+      "held_out_aug_onward": {
+        "n_flagged": 42,
+        "observed_repeat_rate": 0.786,
+        "overall_repeat_rate": 0.6,
+        "odds_ratio_density_adjusted": 0.98,
+        "odds_ratio_ci95": [
+          0.19,
+          2.2
+        ]
+      }
+    }
+  },
+  "ablation_test_auroc": {
+    "density_only": {
+      "auroc": 0.8002,
+      "auroc_ci95": [
+        0.7926,
+        0.8078
+      ]
+    },
+    "everything": {
+      "auroc": 0.8024,
+      "auroc_ci95": [
+        0.7948,
+        0.8104
+      ]
+    }
+  },
+  "finding": "A density-only model reaches about the same AUROC as a model with every closure feature, so the repeat label mostly measures how crowded a spot is. No trained model is shipped for Mumbai.",
+  "shipped_rule": {
+    "flag": "citizen_image_only (closed with no attended photo, only the citizen's own)",
+    "prior_if_flagged": 0.678,
+    "prior_otherwise": 0.5,
+    "cap": 0.7,
+    "used": true,
+    "why_not_fast_close": "no excess repeat rate over density (its odds-ratio interval includes 1)"
+  },
+  "caveats": [
+    "Small samples (a few hundred flagged tickets); the held-out direction agrees but the interval is wide.",
+    "A repeat complaint can be a new problem or a neighbour reporting the same still-broken thing.",
+    "The flag is a risk prior, not proof of a false closure."
+  ],
+  "seconds": 19.6
+}

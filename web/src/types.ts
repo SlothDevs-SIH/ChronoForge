@@ -23,7 +23,7 @@ export interface Ticket {
   closure_photo_url: string | null;
 }
 
-export interface Reason { feature: string; value: number; shap: number }
+export interface Reason { feature: string; value: number | string | null; shap: number | null }
 export interface Score {
   ticket_id: string;
   p_false_closure: number;
@@ -31,6 +31,13 @@ export interface Score {
   reasons: Reason[];
   eligible_checks: string[];
   satellite_eligible: boolean;
+  // Why the satellite check applies, or "not applicable: ..." for small problems (potholes, single garbage piles). Show it when false.
+  satellite_reason?: string | null;
+  // calibrated_probability: synthetic cities only. risk_rank_prior (Bengaluru) and rule_flags (Mumbai) are bounded
+  // priors, NOT probabilities. baseline: no model applies. Show the type next to any score.
+  score_type: "baseline" | "risk_rank_prior" | "rule_flags" | "calibrated_probability";
+  risk_percentile?: number | null;
+  flags?: string[];
 }
 export interface TicketWithScore { ticket: Ticket; score: Score }
 

@@ -10,8 +10,8 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  tickets: (city?: string, status?: string, limit = 100) => {
-    const q = new URLSearchParams({ limit: String(limit) });
+  tickets: (city?: string, status?: string, limit = 100, sort: "newest" | "risk" = "newest") => {
+    const q = new URLSearchParams({ limit: String(limit), sort });
     if (city) q.set("city", city);
     if (status) q.set("status", status);
     return fetch(`${ENGINE}/tickets?${q}`).then((r) => json<TicketWithScore[]>(r));
