@@ -179,7 +179,7 @@ We claim **no real-world false-closure rate**.
 | Agent planner and fusion | Ayush | **Merged on `integration`**, 96 tests; guarded planner, skeptic, optional LLM planner; ran live against the Engine |
 | Telegram channel, then WhatsApp | Ayush | Telegram real and live-verified by Ayush; WhatsApp parked (Meta error). Demo only: needs a registered chat per ticket |
 | Approvals and audit log | Ayush | **Merged on `integration`**; approve flows into the Engine and the audit verifies |
-| Web app | Ishan | Skeleton on `main` (triage, ticket, approvals) |
+| Web app | Ishan, rebuilt 24 Oct | **Done** except the citizen page: landing, how it works, platform (live run), evaluation, overview with ward map and Official/After-reopens toggle, triage, ticket detail with evidence register, approvals, hash-chain audit log. Deployed frontend-only on Vercel (no backend there) |
 
 ## 13. Rules for slides and the pitch
 

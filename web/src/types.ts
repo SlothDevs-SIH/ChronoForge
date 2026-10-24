@@ -98,3 +98,10 @@ export interface Approval {
   status: "pending" | "approved" | "rejected";
   note: string | null;
 }
+
+export interface AuditEntry {
+  idx: number; ts: string; prev_hash: string; hash: string;
+  event: { type?: string; ticket_id?: string; run_id?: string; [key: string]: unknown };
+}
+
+export interface WardDot { ward: string; lat: number; lng: number; tickets: number; official_rate: number; reopen_rate: number | null }

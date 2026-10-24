@@ -123,6 +123,12 @@ def ward_stats(city: Optional[str] = None, category: Optional[str] = None,
     return store.ward_stats(city, category)[:limit]
 
 
+@app.get("/wards/map")
+def ward_map(city: str) -> list[dict]:
+    """Ward dots for the overview map: position, official rate and reopen rate (null where the city has no reopen status)."""
+    return store.ward_map(city)
+
+
 @app.get("/eval/results")
 def eval_results() -> dict:
     return store.eval_results

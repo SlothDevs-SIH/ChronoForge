@@ -204,6 +204,17 @@ class WarehouseStore:
             })
         return out
 
+    def ward_map(self, city: str) -> list[dict[str, Any]]:
+        """One dot per ward: mean ticket position (ward centre for Bengaluru, exact points elsewhere) with closure counts.
+        Wards with no position at all are left out. reopen_rate is None when the city has no reopen status."""
+        rows = self._rows(
+            "select ward, avg(lat) as lat, avg(lng) as lng, count(*)::int as tickets, "
+            "sum((status in ('closed','reopened'))::int)::int as done, sum((status='reopened')::int)::int as reopened "
+            "from v where city = ? and lat is not null and lng is not null group by ward having count(*) >= 20", [city])
+        return [{"ward": r["ward"], "lat": round(r["lat"], 5), "lng": round(r["lng"], 5), "tickets": r["tickets"],
+                 "official_rate": round(r["done"] / r["tickets"], 4),
+                 "reopen_rate": round(r["reopened"] / r["done"], 4) if r["done"] else None} for r in rows]
+
     def cities(self) -> list[dict[str, Any]]:
         return self._rows(
             "select city, count(*)::int as tickets, sum((status='closed')::int)::int as closed, "
@@ -258,6 +269,9 @@ class FixtureStore:
 
     def ward_stats(self, city: Optional[str], category: Optional[str]) -> list[dict[str, Any]]:
         return [w for w in self._ward_stats if (not city or w["city"] == city) and (not category or w["category"] == category)]
+
+    def ward_map(self, city: str) -> list[dict[str, Any]]:
+        return []
 
     def cities(self) -> list[dict[str, Any]]:
         by: dict[str, dict] = {}

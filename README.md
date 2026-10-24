@@ -35,6 +35,7 @@ API docs: http://localhost:8001/docs and http://localhost:8002/docs. Tests: `cd 
 | Photo verifier (duplicate, GPS, timestamp) | Real; **CLIP and DINOv2 are off by default and not run with the real models** |
 | LLM planner and reply classifier (Gemini, OpenAI) | Real code; live runs need keys; the deterministic planner is the fallback |
 | Telegram | Real code, live-verified by Ayush; WhatsApp parked on a Meta error |
+| Web app (React, Vite): landing, how it works, platform, evaluation, overview with ward map, triage, ticket detail, approvals, audit log | Real, built on the live Engine and Agent APIs; the ward map is a plain SVG dot map (no basemap tiles); the citizen web page is **not built** |
 | Municipal system | **Simulated** (reopen and escalate flip a status in the Engine) |
 | Photos | Only the 12-ticket `demo` set; real tickets have none |
 | Agent with stubs on (`AGENT_USE_STUBS=1`) | Stub tools: plumbing only, never a result |

@@ -10,3 +10,6 @@ data/cache/
 .DS_Store
 data/raw/
 data/warehouse/
+
+engine/.pytest_tmp/
+.pytest_tmp/

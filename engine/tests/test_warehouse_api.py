@@ -191,3 +191,14 @@ def test_eval_results_separate_scorers_from_verifiers(tmp_path, monkeypatch, sco
     r = TestClient(main.app).get("/eval/results").json()
     assert list(r["scorers"]) == ["blr-reopen-v1"] and set(r["verifiers"]) == {"satellite", "benchmark_v1"}
     assert r["verifiers_are_placeholder"] is False and r["is_placeholder"] is False and r["pending"]
+
+
+def test_ward_map_endpoint_returns_dots_with_rates(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import main
+    dots = [{"ward": "W1", "lat": 12.9, "lng": 77.5, "tickets": 30, "official_rate": 0.9, "reopen_rate": 0.02}]
+    monkeypatch.setattr(main.store, "ward_map", lambda city: dots if city == "bengaluru" else [], raising=False)
+    c = TestClient(main.app)
+    assert c.get("/wards/map", params={"city": "bengaluru"}).json() == dots
+    assert c.get("/wards/map", params={"city": "nowhere"}).json() == []
+    assert c.get("/wards/map").status_code == 422     # the city is required

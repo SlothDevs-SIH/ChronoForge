@@ -122,3 +122,5 @@ Loaded and applied: `frontend-design` (one bold element, avoid template tells, p
 - A faint seam remains at the top edge of one patched card area in the hero video (source is AI-generated; see section 6).
 - No automated frontend tests (type-check, build and the Playwright checks above only). Photo "still broken" check needs CLIP and stays off.
 - Port 5173 is a VM-hosted dev server that cannot reach host backends; use `http://localhost:5174` or set `ENGINE_PROXY` / `AGENT_PROXY`.
+
+**Added later the same day:** `/evaluation` (read from `/eval/results`), `/audit` (hash chain and verify badge), Engine `GET /wards/map` with an SVG ward map and an Official / After-citizen-reopens toggle. Still not built: the citizen reply page (needs a ticket-bound reply endpoint in the Agent), a basemap under the ward map, a before/after slider for satellite chips, frontend unit tests.

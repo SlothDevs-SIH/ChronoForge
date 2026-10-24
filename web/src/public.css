@@ -184,3 +184,33 @@ code, pre { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
 .detail-main, .detail-rail, .detail-layout > * { min-width: 0; }
 .page-heading h1, .page-heading p, .case-meta dd, .tile-copy p, .score-copy p { overflow-wrap: anywhere; }
 @media (max-width: 700px) { .detail-layout { grid-template-columns: minmax(0, 1fr); } .score-card-body { flex-direction: column; align-items: flex-start; } }
+
+/* Evaluation */
+.eval-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.eval-grid article { padding: 18px; border: 1px solid var(--tc-border); border-radius: 14px; background: var(--tc-ivory); }
+.eval-grid h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 18px; }
+.eval-big { margin: 0 0 8px; font: 800 38px/1 var(--font-display); letter-spacing: -.04em; color: var(--tc-forest); }
+.eval-big span { color: var(--pub-muted); font: 500 14px var(--font-body); letter-spacing: 0; }
+.eval-table th, .eval-table td { padding: 10px 8px; border-bottom: 1px solid var(--tc-border); text-align: left; font-size: 14px; font-weight: 500; vertical-align: middle; }
+.eval-table thead th { color: var(--pub-muted); font-size: 12px; font-weight: 600; } .eval-table .num { text-align: right; }
+.eval-table tbody th { text-transform: capitalize; font-weight: 700; }
+.meter { display: inline-block; width: 110px; height: 8px; margin-right: 8px; vertical-align: middle; border-radius: 4px; background: var(--tc-pale-sage); }
+.meter i { display: block; height: 100%; border-radius: 4px; background: var(--tc-evergreen); }
+.eval-callout { margin: 18px 0 8px; padding: 14px 16px; border-left: 4px solid var(--tc-warning); border-radius: 0 10px 10px 0; background: #fbf3e4; font-size: 15px; }
+.eval-line { margin: 0 0 10px; font-size: 15px; line-height: 1.55; }
+.eval-limits { margin: 14px 0 0; padding-left: 20px; color: #33413a; font-size: 14px; line-height: 1.6; } .eval-limits li + li { margin-top: 6px; }
+@media (max-width: 700px) { .eval-table { display: block; overflow-x: auto; } }
+
+/* Ward map */
+.chart-row { margin: 18px 0; }
+.wardmap svg { display: block; width: 100%; height: auto; margin-top: 6px; }
+.seg { display: inline-flex; padding: 3px; border: 1px solid var(--tc-border); border-radius: 12px; background: #fff; }
+.seg button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--tc-charcoal); font: 600 13px var(--font-body); cursor: pointer; }
+.seg button:hover { background: var(--tc-pale-sage); } .seg button.is-on, .seg button.is-on:hover { background: var(--tc-forest); color: #fff; }
+.wardmap-legend { display: flex; align-items: center; gap: 4px; margin-top: 8px; color: var(--pub-muted); font-size: 12px; }
+.wardmap-legend i { width: 28px; height: 10px; border-radius: 2px; } .wardmap-legend span:first-child { margin-right: 6px; } .wardmap-legend span:last-child { margin-left: 6px; }
+
+/* App bar with seven links: scroll the nav instead of widening the page */
+.app-nav { min-width: 0; overflow-x: auto; scrollbar-width: none; } .app-nav a { white-space: nowrap; }
+.app-nav::-webkit-scrollbar { display: none; }
+@media (max-width: 1100px) { .app-topbar { flex-wrap: wrap; row-gap: 6px; } .app-topbar .app-nav { order: 3; flex: 1 0 100%; margin-right: 0; } .app-actions { margin-left: auto; } }

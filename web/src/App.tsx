@@ -5,6 +5,8 @@ import Platform from "./pages/Platform";
 import Triage from "./pages/Triage";
 import TicketDetail from "./pages/TicketDetail";
 import Approvals from "./pages/Approvals";
+import Evaluation from "./pages/Evaluation";
+import AuditLog from "./pages/AuditLog";
 import ConnectionBadge from "./components/ConnectionBadge";
 import { Brand } from "./components/PublicNav";
 
@@ -22,6 +24,8 @@ function AppShell() {
           <NavLink to="/dashboard" className={link}>Overview</NavLink>
           <NavLink to={`/triage${city ? `?city=${city}` : ""}`} className={link}>Triage queue</NavLink>
           <NavLink to="/approvals" className={link}>Approvals</NavLink>
+          <NavLink to="/audit" className={link}>Audit log</NavLink>
+          <NavLink to="/evaluation" className={link}>Evaluation</NavLink>
           <NavLink to="/platform" className={link}>Platform</NavLink>
         </nav>
         <div className="app-actions">
@@ -60,11 +64,13 @@ export default function App() {
       <Route path="/" element={<Landing />} />
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/platform" element={<Platform />} />
+      <Route path="/evaluation" element={<Evaluation />} />
       <Route element={<AppShell />}>
         <Route path="/dashboard" element={<CityRoute overview />} />
         <Route path="/triage" element={<CityRoute />} />
         <Route path="/ticket/:id" element={<TicketDetail />} />
         <Route path="/approvals" element={<Approvals />} />
+        <Route path="/audit" element={<AuditLog />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

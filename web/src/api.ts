@@ -1,5 +1,5 @@
 // The only place that calls fetch. Components import from here.
-import type { Approval, CitySummary, Evidence, Score, Ticket, TicketWithScore, TraceEvent, WardStat } from "./types";
+import type { Approval, WardDot, AuditEntry, CitySummary, Evidence, Score, Ticket, TicketWithScore, TraceEvent, WardStat } from "./types";
 
 const ENGINE = "/api/engine";
 const AGENT = "/api/agent";
@@ -10,6 +10,10 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
+  evalResults: () => fetch(`${ENGINE}/eval/results`).then((r) => json<Record<string, unknown>>(r)),
+  audit: () => fetch(`${AGENT}/audit`).then((r) => json<AuditEntry[]>(r)),
+  auditVerify: () => fetch(`${AGENT}/audit/verify`).then((r) => json<{ ok: boolean; first_broken_idx: number | null; length: number }>(r)),
+  wardMap: (city: string) => fetch(`${ENGINE}/wards/map?city=${encodeURIComponent(city)}`).then((r) => json<WardDot[]>(r)),
   engineHealth: () => fetch(`${ENGINE}/health`).then((r) => json<{ ok: boolean; mode: string }>(r)),
   agentHealth: () => fetch(`${AGENT}/health`).then((r) => json<{ ok: boolean; stubs: boolean }>(r)),
   /** Demo set photos, served by the Engine (open-licence images, see demo/photos/ATTRIBUTION.md). */

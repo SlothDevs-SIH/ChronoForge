@@ -18,6 +18,7 @@ export default function PublicNav({ overlay = false }: { overlay?: boolean }) {
         <nav aria-label="Primary">
           <NavLink to="/how-it-works">How it works</NavLink>
           <NavLink to="/platform">Platform</NavLink>
+          <NavLink to="/evaluation">Evaluation</NavLink>
           <NavLink to="/dashboard" className="pub-nav-app">Open the app</NavLink>
         </nav>
       </div>
