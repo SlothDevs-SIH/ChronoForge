@@ -28,7 +28,7 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 
 ## Phase 3: Citizen channel
 - [ ] Telegram round trip: send, reply, parse, Evidence
-- [ ] Keyword/number reply parser (en/hi/mr/kn)
+- [x] Keyword/number reply parser (en/hi/mr/kn)
 - [ ] LLM zero-shot fallback for free-text replies
 - [ ] Real satellite tool wired in from Soham
 - [ ] **Milestone:** one ticket uses 3 tools
