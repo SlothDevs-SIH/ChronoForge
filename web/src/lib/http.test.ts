@@ -67,3 +67,19 @@ describe("streamSse", () => {
     expect(err?.kind).toBe("forbidden");
   });
 });
+
+describe("retry policy and rate-limit wording", () => {
+  it("never retries a 429, a challenge page or an auth problem, and retries a dropped connection or 5xx once", async () => {
+    const { ApiError, shouldRetry } = await import("./http");
+    expect(shouldRetry(0, new ApiError("non_json", 429, "non_json", "x"))).toBe(false);
+    expect(shouldRetry(0, new ApiError("non_json", 200, "non_json", "x"))).toBe(false);
+    expect(shouldRetry(0, new ApiError("unauthorized", 401, "unauthorized", "x"))).toBe(false);
+    expect(shouldRetry(0, new ApiError("network", 0, "network", "x"))).toBe(true);
+    expect(shouldRetry(0, new ApiError("server", 503, "unavailable", "x"))).toBe(true);
+    expect(shouldRetry(1, new ApiError("server", 503, "unavailable", "x"))).toBe(false);
+  });
+  it("explains a 429 in plain words", async () => {
+    const { ApiError, userMessage } = await import("./http");
+    expect(userMessage(new ApiError("client", 429, "rate_limited", "The request failed (429)."))).toMatch(/limiting requests/);
+  });
+});

@@ -83,9 +83,22 @@ export async function request<T>(base: string, path: string, opts: RequestOption
   catch { throw new ApiError("non_json", res.status, "bad_json", "The service sent a response that could not be read."); }
 }
 
+/**
+ * Retry policy for every query: a rate-limit (429), an HTML challenge page, a sign-in or permission problem will not be
+ * fixed by asking again at once, and asking again makes a rate limit last longer. Only a dropped connection or a 5xx gets
+ * one more try, after a pause.
+ */
+export function shouldRetry(failureCount: number, err: unknown): boolean {
+  if (failureCount >= 1) return false;
+  if (!(err instanceof ApiError)) return false;
+  if (err.status === 429 || err.kind === "non_json" || err.kind === "unauthorized" || err.kind === "forbidden" || err.kind === "not_found") return false;
+  return err.kind === "network" || err.kind === "server";
+}
+
 /** Plain-language text for any thrown value; never contains ports, paths or commands. */
 export function userMessage(err: unknown): string {
   if (err instanceof ApiError) {
+    if (err.status === 429) return "TrueClose's servers are limiting requests right now. Wait a minute, then try again.";
     if (err.kind === "network" || err.kind === "non_json") return "This part of TrueClose is not responding right now. Try again in a moment.";
     if (err.kind === "unauthorized") return "Your session has ended. Sign in again to continue.";
     if (err.kind === "forbidden") return "Your account doesn't have access to this.";
