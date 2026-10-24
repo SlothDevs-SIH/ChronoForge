@@ -50,7 +50,12 @@ def check_photo(ticket_id: str, closure_photo_url: str | None = None) -> Evidenc
         ticket = _get_ticket(ticket_id)
         url = closure_photo_url or (ticket or {}).get("closure_photo_url")
         if url:
-            return verify_photo(ticket_id, url, ticket, PhotoIndex(), cost=config.TOOL_COSTS["check_photo"])
+            try:
+                return verify_photo(ticket_id, url, ticket, PhotoIndex(), cost=config.TOOL_COSTS["check_photo"])
+            except Exception as exc:   # missing file, bad URL, corrupt image: report it, do not kill the run
+                return Evidence(ticket_id=ticket_id, check="photo", verdict="inconclusive", likelihood_ratio=1.0,
+                                confidence=0.0, cost=config.TOOL_COSTS["check_photo"],
+                                details={"reason": f"closure photo unreadable ({type(exc).__name__})"})
         return Evidence(ticket_id=ticket_id, check="photo", verdict="inconclusive", likelihood_ratio=1.0,
                         confidence=0.0, cost=config.TOOL_COSTS["check_photo"], details={"reason": "no closure photo"})
     bad = stub_truth_false(ticket_id)

@@ -1,0 +1,6 @@
+{
+  "ticket_id": "blr-0001", "state": "likely_not_fixed", "prior": 0.82, "posterior": 0.99,
+  "evidence_ids": ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000003"],
+  "recommended_action": "reopen", "requires_human": true,
+  "explanation": "Closed in 4 minutes with 3 repeat complaints nearby; the closure photo matches another ticket's photo and the complainant replied that it was not fixed."
+}

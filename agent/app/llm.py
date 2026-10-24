@@ -70,3 +70,22 @@ def complete_json(prompt: str, schema: type[T]) -> tuple[T, str]:
                 errors.append(f"{name}: {type(exc).__name__}")
                 break
     raise LLMError("; ".join(errors) or "no LLM provider configured")
+
+
+def transcribe(audio: bytes, mime: str = "audio/ogg") -> str:
+    """Voice-note transcription through Gemini audio input (hosted API, no GPU). Raises LLMError on failure."""
+    import base64
+    if not config.GEMINI_API_KEY:
+        raise LLMError("no Gemini key for transcription")
+    try:
+        r = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent",
+            headers={"x-goog-api-key": config.GEMINI_API_KEY},
+            json={"contents": [{"parts": [
+                {"text": "Transcribe this voice note exactly, in its original language. Output only the text."},
+                {"inline_data": {"mime_type": mime, "data": base64.b64encode(audio).decode()}}]}]},
+            timeout=max(config.LLM_TIMEOUT, 30))
+        r.raise_for_status()
+        return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as exc:
+        raise LLMError(f"transcription failed: {type(exc).__name__}")

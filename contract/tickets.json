@@ -1,0 +1,44 @@
+[
+  {
+    "ticket_id": "blr-0001", "city": "bengaluru", "data_quality": "partial", "source": "bbmp_csv",
+    "category": "pothole", "text": "Large pothole near Koramangala 5th block signal, bikes skidding.", "lang": "en",
+    "lat": 12.9352, "lng": 77.6245, "h3": "89618925c4bffff", "ward": "Koramangala",
+    "created_at": "2024-03-04T06:10:00Z", "closed_at": "2024-03-04T06:14:00Z", "closed_by_hash": "a3f9c1",
+    "status": "closed", "closure_note": "Work completed.", "closure_photo_url": "demo/photos/blr-0001-closure.jpg"
+  },
+  {
+    "ticket_id": "blr-0002", "city": "bengaluru", "data_quality": "partial", "source": "bbmp_csv",
+    "category": "garbage", "text": "Black spot with garbage dumped on the vacant plot, not cleared for weeks.", "lang": "en",
+    "lat": 12.9716, "lng": 77.5946, "h3": "8960145b483ffff", "ward": "Shivajinagar",
+    "created_at": "2024-02-11T09:00:00Z", "closed_at": "2024-02-20T23:58:00Z", "closed_by_hash": "b71d22",
+    "status": "closed", "closure_note": null, "closure_photo_url": "demo/photos/blr-0002-closure.jpg"
+  },
+  {
+    "ticket_id": "blr-0003", "city": "bengaluru", "data_quality": "partial", "source": "bbmp_csv",
+    "category": "streetlight", "text": "Streetlight not working on 80ft road for a week.", "lang": "en",
+    "lat": 12.925, "lng": 77.5938, "h3": "89618925d63ffff", "ward": "Jayanagar",
+    "created_at": "2024-03-01T18:30:00Z", "closed_at": "2024-03-03T11:00:00Z", "closed_by_hash": "c04e87",
+    "status": "closed", "closure_note": "Lamp replaced and verified at night.", "closure_photo_url": "demo/photos/blr-0003-closure.jpg"
+  },
+  {
+    "ticket_id": "pune-0001", "city": "pune", "data_quality": "synthetic", "source": "mock_muni",
+    "category": "drain", "text": "Drain chamber blocked, water overflowing on the road after rain.", "lang": "mr",
+    "lat": 18.5204, "lng": 73.8567, "h3": "8960885016bffff", "ward": "Kasba Peth",
+    "created_at": "2024-06-02T08:00:00Z", "closed_at": "2024-06-02T08:20:00Z", "closed_by_hash": "d19a05",
+    "status": "closed", "closure_note": "Cleaned.", "closure_photo_url": "demo/photos/pune-0001-closure.jpg"
+  },
+  {
+    "ticket_id": "mum-0001", "city": "mumbai", "data_quality": "synthetic", "source": "mock_muni",
+    "category": "pothole", "text": "Pothole on service road near the station, vehicles slowing down.", "lang": "hi",
+    "lat": 19.076, "lng": 72.8777, "h3": "89608b0b61bffff", "ward": "Andheri East",
+    "created_at": "2024-07-10T07:00:00Z", "closed_at": "2024-08-27T10:00:00Z", "closed_by_hash": "e55b30",
+    "status": "closed", "closure_note": "Patched.", "closure_photo_url": "demo/photos/mum-0001-closure.jpg"
+  },
+  {
+    "ticket_id": "syn-0001", "city": "synthetic", "data_quality": "synthetic", "source": "mock_muni",
+    "category": "garbage", "text": "Garbage heap near the market is back every few days.", "lang": "en",
+    "lat": 12.99, "lng": 77.61, "h3": "8961892e973ffff", "ward": "Ward 14",
+    "created_at": "2024-05-05T10:00:00Z", "closed_at": "2024-05-05T10:02:00Z", "closed_by_hash": "a3f9c1",
+    "status": "closed", "closure_note": null, "closure_photo_url": "demo/photos/blr-0001-closure.jpg"
+  }
+]

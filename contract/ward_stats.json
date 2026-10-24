@@ -1,0 +1,8 @@
+[
+  {"city": "bengaluru", "ward": "Koramangala", "category": "pothole", "tickets": 120, "official_rate": 0.93, "honest_rate": 0.61},
+  {"city": "bengaluru", "ward": "Shivajinagar", "category": "garbage", "tickets": 85, "official_rate": 0.88, "honest_rate": 0.7},
+  {"city": "bengaluru", "ward": "Jayanagar", "category": "streetlight", "tickets": 60, "official_rate": 0.96, "honest_rate": 0.9},
+  {"city": "pune", "ward": "Kasba Peth", "category": "drain", "tickets": 40, "official_rate": 0.9, "honest_rate": 0.66},
+  {"city": "mumbai", "ward": "Andheri East", "category": "pothole", "tickets": 75, "official_rate": 0.85, "honest_rate": 0.58},
+  {"city": "synthetic", "ward": "Ward 14", "category": "garbage", "tickets": 100, "official_rate": 0.95, "honest_rate": 0.55}
+]

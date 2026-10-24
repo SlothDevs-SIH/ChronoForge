@@ -47,6 +47,19 @@ def register_contact(ticket_id: str, req: ContactRequest):
     return {"ticket_id": ticket_id, "chat_hash": telegram.chat_hash(req.chat_id)}
 
 
+class SendRequest(BaseModel):
+    ticket_id: str
+    category: str = "issue"
+    area: str = "your area"
+    date: str = "recently"
+
+
+@app.post("/citizen/send")
+def citizen_send(req: SendRequest):
+    """Contract endpoint: send the "Was it fixed?" message for a ticket (contact must be registered)."""
+    return ask_now(req.ticket_id, AskRequest(category=req.category, area=req.area, date=req.date))
+
+
 class AskRequest(BaseModel):
     category: str = "pothole"
     area: str = "your area"
@@ -61,6 +74,7 @@ def ask_now(ticket_id: str, req: AskRequest):
     return {"sent": True}
 
 
+@app.post("/telegram/webhook")
 @app.post("/channels/telegram/webhook")
 def telegram_webhook(update: dict, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
     if config.TELEGRAM_WEBHOOK_SECRET and x_telegram_bot_api_secret_token != config.TELEGRAM_WEBHOOK_SECRET:
@@ -98,6 +112,7 @@ def start_polling():
         threading.Thread(target=_poll_loop, daemon=True).start()
 
 
+@app.get("/whatsapp/webhook")
 @app.get("/channels/whatsapp/webhook")
 def whatsapp_verify(hub_mode: str | None = Query(default=None, alias="hub.mode"),
                     hub_token: str | None = Query(default=None, alias="hub.verify_token"),
@@ -107,6 +122,7 @@ def whatsapp_verify(hub_mode: str | None = Query(default=None, alias="hub.mode")
     raise HTTPException(403, "verification failed")
 
 
+@app.post("/whatsapp/webhook")
 @app.post("/channels/whatsapp/webhook")
 def whatsapp_webhook(payload: dict):
     fallback = llm_planner.classify_reply if llm.available_providers() else None

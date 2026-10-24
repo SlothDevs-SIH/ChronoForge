@@ -22,7 +22,7 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [x] Approvals table and endpoints
 - [x] Audit chain (hash-linked) and `/audit/verify`
 - [x] Photo verifier: add CLIP ViT-B/32 (scene presence, before/after) (code + tests done; real model run still to try)
-- [ ] Call Soham's real Engine score
+- [x] Call Soham's real Engine score (verified live against his Engine, fixtures mode)
 - [x] Demo photo set with planted failures (synthetic placeholders via `experiments/make_demo_photos.py`; swap in real photos)
 - [ ] **Milestone:** agent runs on a real scored ticket
 
@@ -51,9 +51,9 @@ Legend: `[x]` done, `[ ]` to do, `(stretch)` only if time allows.
 - [ ] Calibrate likelihood ratios on `data/benchmark_v1.parquet`
 - [ ] Cost-vs-accuracy experiment (harness done on stub data; needs real benchmark numbers)
 - [ ] Dockerfile / docker-compose (written, not built: no Docker here); deploy still to do
-- [ ] (stretch) DINOv2-small second embedding
-- [ ] (stretch) Skeptic call on final verdict
-- [ ] (stretch) Whisper voice notes via hosted API
+- [x] (stretch) DINOv2-small second embedding (code + tests; real model not downloaded yet)
+- [x] (stretch) Skeptic call on final verdict (AGENT_USE_SKEPTIC=1)
+- [x] (stretch) Voice notes via hosted API (Gemini audio, not Whisper; code + tests)
 
 ## Phase 7: Freeze
 - [ ] Offline-mode rehearsal

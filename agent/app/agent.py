@@ -84,7 +84,8 @@ def execute(run_id: str, planner: Planner | None = None, delay: float | None = N
                                     f"LR {stored.likelihood_ratio:g}; posterior {posterior:.2f}", "ask_citizen")
 
         steps = 0
-        while fusion.is_uncertain(posterior) and steps < config.MAX_STEPS:
+        # contract: the score alone never gives a verdict, so keep checking until one check is conclusive
+        while (fusion.is_uncertain(posterior) or not _conclusive(run.evidence)) and steps < config.MAX_STEPS:
             steps += 1
             tool, why = planner(state)
             if tool is None:
@@ -118,6 +119,19 @@ def execute(run_id: str, planner: Planner | None = None, delay: float | None = N
                                     f"LR {ev.likelihood_ratio:g}; posterior {posterior:.2f}", tool)
 
         st = fusion.state_for(posterior)
+        if st != "cannot_tell" and not _conclusive(run.evidence):
+            run.emit("thought", "no independent check was conclusive; the score alone cannot give a verdict")
+            st = "cannot_tell"
+        if st == "likely_not_fixed" and config.USE_SKEPTIC:
+            from . import skeptic
+            reply, info = skeptic.review(posterior, run.evidence)
+            if reply is None:
+                run.emit("thought", f"skeptic: {info}; verdict left as the evidence says")
+            elif reply.hole_found:
+                run.emit("thought", f"skeptic [{info}] found a weakness: {reply.argument} Downgrading to cannot_tell.")
+                st = "cannot_tell"
+            else:
+                run.emit("thought", f"skeptic [{info}] found no hole: {reply.argument}")
         action = {"likely_not_fixed": "reopen", "cannot_tell": "human_spot_check", "verified_fixed": "none"}[st]
         verdict = Verdict(ticket_id=run.ticket_id, state=st, prior=round(prior, 4), posterior=round(posterior, 4),
                           evidence_ids=[e.evidence_id for e in run.evidence], recommended_action=action,
@@ -137,6 +151,10 @@ def execute(run_id: str, planner: Planner | None = None, delay: float | None = N
     finally:
         _persist_run(run)
     return verdict
+
+
+def _conclusive(evidence: list[Evidence]) -> bool:
+    return any(e.verdict != "inconclusive" for e in evidence)
 
 
 def _answered_citizen_evidence(ticket_id: str) -> list[Evidence]:

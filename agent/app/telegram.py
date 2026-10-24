@@ -66,8 +66,24 @@ def handle_update(update: dict, fallback: Callable[[str], str | None] | None = N
     chat_id = (msg.get("chat") or {}).get("id")
     if chat_id is None:
         return None
-    return handle_reply("telegram", chat_id, msg.get("text") or msg.get("caption") or "",
-                        bool(msg.get("photo")), fallback)
+    text = msg.get("text") or msg.get("caption") or ""
+    if not text and msg.get("voice"):
+        text = transcribe_voice(msg["voice"]["file_id"])
+    return handle_reply("telegram", chat_id, text, bool(msg.get("photo")), fallback)
+
+
+def transcribe_voice(file_id: str, fetch=None, transcriber=None) -> str:
+    """Download a Telegram voice note and transcribe it. Returns "" if anything fails (reply stays unparsed)."""
+    from . import llm
+    try:
+        if fetch is None:
+            info = httpx.get(f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/getFile",
+                             params={"file_id": file_id}, timeout=10).json()["result"]
+            fetch = lambda: httpx.get(f"https://api.telegram.org/file/bot{config.TELEGRAM_BOT_TOKEN}/"
+                                      f"{info['file_path']}", timeout=20).content
+        return (transcriber or llm.transcribe)(fetch())
+    except Exception:
+        return ""
 
 
 def handle_reply(channel: str, chat_id: str | int, text: str, has_photo: bool = False,

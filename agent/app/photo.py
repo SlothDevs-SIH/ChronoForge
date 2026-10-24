@@ -101,7 +101,8 @@ class PhotoIndex:
 
 def verify_photo(ticket_id: str, closure_photo: str, ticket: dict | None = None,
                  index: PhotoIndex | None = None, cost: int = 1, use_clip: bool | None = None,
-                 complaint_photo: str | None = None, embedder=None) -> Evidence:
+                 complaint_photo: str | None = None, embedder=None, use_dino: bool | None = None,
+                 dino_embedder=None) -> Evidence:
     """ticket may carry lat, lng, closed_at (ISO). Missing fields skip the matching check."""
     ticket = ticket or {}
     index = index if index is not None else PhotoIndex()
@@ -144,8 +145,19 @@ def verify_photo(ticket_id: str, closure_photo: str, ticket: dict | None = None,
         except Exception as exc:   # model missing or unreadable photo: keep v1 checks, say so
             details["clip_error"] = type(exc).__name__
 
+    if config.USE_DINO if use_dino is None else use_dino:
+        try:
+            from . import dino_check
+            before = complaint_photo or ticket.get("complaint_photo_url")
+            df, dp, dd = dino_check.dino_checks(img, load_image(before) if before else None, dino_embedder)
+            flags += df
+            passed += dp
+            details["checks"].update(dd)
+        except Exception as exc:
+            details["dino_error"] = type(exc).__name__
+
     lr_for = {"duplicate": LR_DUPLICATE, "location": LR_GPS_FAR, "timestamp": LR_STALE,
-              "scene": 5.0, "before_after": 3.0}
+              "scene": 5.0, "before_after": 3.0, "same_scene": 3.0}
     if flags:
         lr = math.prod(lr_for[f] for f in flags)
         verdict, conf = "contradicts_fix", 0.9 if "duplicate" in flags else 0.7
