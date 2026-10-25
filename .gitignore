@@ -17,3 +17,30 @@ engine/.pytest_tmp/
 # Cloud Run environment files hold real secrets
 deploy/cloudrun/*.env.yaml
 !deploy/cloudrun/*.env.example.yaml
+
+# Secrets and local env files (the *.example templates stay tracked)
+.env.local
+.env.*.local
+.env.production
+*.env.yaml
+!*.env.example.yaml
+
+# Scratch outputs, logs and stray files
+*.log
+/*.parquet
+/*.report.json
+/*.docx
+web/test-results/
+web/playwright-report/
+data/experiments/*.txt
+data/experiments/*.log
+data/experiments/*.raw.json
+/AYUSH_TASKS.md
+/soham.md
+/research_vedashri.md
+/TRUECLOSE_FRONTEND_MASTER_PROMPT.md
+/frontend_comp/
+/frontend_ishan.md
+data/experiments/clip_demo.results.json
+data/experiments/*.metrics.before.json
+data/experiments/*.metrics.rerun.json
