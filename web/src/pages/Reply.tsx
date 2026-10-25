@@ -10,11 +10,11 @@ type Lang = "en" | "hi" | "mr" | "kn";
 const LANGS: { id: Lang; name: string }[] = [{ id: "en", name: "English" }, { id: "hi", name: "हिन्दी" }, { id: "mr", name: "मराठी" }, { id: "kn", name: "ಕನ್ನಡ" }];
 
 // Plain, neutral wording: the question never suggests an answer.
-const TEXT: Record<Lang, { title: string; ask: (c: string, w: string) => string; yes: string; partly: string; no: string; thanks: string; thanksNote: string; used: string; expired: string }> = {
-  en: { title: "Was it fixed?", ask: (c, w) => `A complaint about ${c} in ${w} was marked as fixed. Was the problem actually fixed?`, yes: "Yes, it was fixed", partly: "Partly fixed", no: "No, it is not fixed", thanks: "Thank you", thanksNote: "Your answer was recorded. A person reviews every case before anything is reopened.", used: "This link has already been used.", expired: "This link has expired." },
-  hi: { title: "क्या यह ठीक हुआ?", ask: (c, w) => `${w} में ${c} की शिकायत को ठीक हुआ बताया गया है। क्या समस्या सच में ठीक हुई?`, yes: "हाँ, ठीक हो गया", partly: "आंशिक रूप से ठीक", no: "नहीं, ठीक नहीं हुआ", thanks: "धन्यवाद", thanksNote: "आपका उत्तर दर्ज हो गया। कुछ भी दोबारा खोलने से पहले हर मामले की समीक्षा एक व्यक्ति करता है।", used: "यह लिंक पहले ही इस्तेमाल हो चुका है।", expired: "यह लिंक समाप्त हो चुका है।" },
-  mr: { title: "हे दुरुस्त झाले का?", ask: (c, w) => `${w} मधील ${c} ची तक्रार दुरुस्त झाली म्हणून नोंदवली आहे. समस्या खरोखर दुरुस्त झाली का?`, yes: "होय, दुरुस्त झाले", partly: "अंशतः दुरुस्त", no: "नाही, दुरुस्त झाले नाही", thanks: "धन्यवाद", thanksNote: "तुमचे उत्तर नोंदवले गेले. काहीही पुन्हा उघडण्यापूर्वी प्रत्येक प्रकरणाचा आढावा एक व्यक्ती घेते.", used: "ही लिंक आधीच वापरली गेली आहे.", expired: "ही लिंक कालबाह्य झाली आहे." },
-  kn: { title: "ಇದು ಸರಿಪಡಿಸಲಾಗಿದೆಯೇ?", ask: (c, w) => `${w} ನಲ್ಲಿನ ${c} ದೂರನ್ನು ಸರಿಪಡಿಸಲಾಗಿದೆ ಎಂದು ಗುರುತಿಸಲಾಗಿದೆ. ಸಮಸ್ಯೆ ನಿಜವಾಗಿಯೂ ಸರಿಯಾಯಿತೇ?`, yes: "ಹೌದು, ಸರಿಪಡಿಸಲಾಗಿದೆ", partly: "ಭಾಗಶಃ ಸರಿಪಡಿಸಲಾಗಿದೆ", no: "ಇಲ್ಲ, ಸರಿಪಡಿಸಿಲ್ಲ", thanks: "ಧನ್ಯವಾದಗಳು", thanksNote: "ನಿಮ್ಮ ಉತ್ತರವನ್ನು ದಾಖಲಿಸಲಾಗಿದೆ. ಯಾವುದನ್ನಾದರೂ ಮತ್ತೆ ತೆರೆಯುವ ಮೊದಲು ಒಬ್ಬ ವ್ಯಕ್ತಿ ಪ್ರತಿ ಪ್ರಕರಣವನ್ನು ಪರಿಶೀಲಿಸುತ್ತಾರೆ.", used: "ಈ ಲಿಂಕ್ ಈಗಾಗಲೇ ಬಳಸಲಾಗಿದೆ.", expired: "ಈ ಲಿಂಕ್ ಅವಧಿ ಮುಗಿದಿದೆ." },
+const TEXT: Record<Lang, { title: string; ask: (c: string, w: string) => string; yes: string; partly: string; no: string; thanks: string; thanksNote: string; fallbackCategory: string; fallbackWard: string; used: string; expired: string }> = {
+  en: { fallbackCategory: "your", fallbackWard: "your area", title: "Was it fixed?", ask: (c, w) => `A complaint about ${c} in ${w} was marked as fixed. Was the problem actually fixed?`, yes: "Yes, it was fixed", partly: "Partly fixed", no: "No, it is not fixed", thanks: "Thank you", thanksNote: "Your answer was recorded. A person reviews every case before anything is reopened.", used: "This link has already been used.", expired: "This link has expired." },
+  hi: { fallbackCategory: "आपकी", fallbackWard: "आपके क्षेत्र", title: "क्या यह ठीक हुआ?", ask: (c, w) => `${w} में ${c} की शिकायत को ठीक हुआ बताया गया है। क्या समस्या सच में ठीक हुई?`, yes: "हाँ, ठीक हो गया", partly: "आंशिक रूप से ठीक", no: "नहीं, ठीक नहीं हुआ", thanks: "धन्यवाद", thanksNote: "आपका उत्तर दर्ज हो गया। कुछ भी दोबारा खोलने से पहले हर मामले की समीक्षा एक व्यक्ति करता है।", used: "यह लिंक पहले ही इस्तेमाल हो चुका है।", expired: "यह लिंक समाप्त हो चुका है।" },
+  mr: { fallbackCategory: "तुमची", fallbackWard: "तुमच्या परिसर", title: "हे दुरुस्त झाले का?", ask: (c, w) => `${w} मधील ${c} ची तक्रार दुरुस्त झाली म्हणून नोंदवली आहे. समस्या खरोखर दुरुस्त झाली का?`, yes: "होय, दुरुस्त झाले", partly: "अंशतः दुरुस्त", no: "नाही, दुरुस्त झाले नाही", thanks: "धन्यवाद", thanksNote: "तुमचे उत्तर नोंदवले गेले. काहीही पुन्हा उघडण्यापूर्वी प्रत्येक प्रकरणाचा आढावा एक व्यक्ती घेते.", used: "ही लिंक आधीच वापरली गेली आहे.", expired: "ही लिंक कालबाह्य झाली आहे." },
+  kn: { fallbackCategory: "ನಿಮ್ಮ", fallbackWard: "ನಿಮ್ಮ ಪ್ರದೇಶ", title: "ಇದು ಸರಿಪಡಿಸಲಾಗಿದೆಯೇ?", ask: (c, w) => `${w} ನಲ್ಲಿನ ${c} ದೂರನ್ನು ಸರಿಪಡಿಸಲಾಗಿದೆ ಎಂದು ಗುರುತಿಸಲಾಗಿದೆ. ಸಮಸ್ಯೆ ನಿಜವಾಗಿಯೂ ಸರಿಯಾಯಿತೇ?`, yes: "ಹೌದು, ಸರಿಪಡಿಸಲಾಗಿದೆ", partly: "ಭಾಗಶಃ ಸರಿಪಡಿಸಲಾಗಿದೆ", no: "ಇಲ್ಲ, ಸರಿಪಡಿಸಿಲ್ಲ", thanks: "ಧನ್ಯವಾದಗಳು", thanksNote: "ನಿಮ್ಮ ಉತ್ತರವನ್ನು ದಾಖಲಿಸಲಾಗಿದೆ. ಯಾವುದನ್ನಾದರೂ ಮತ್ತೆ ತೆರೆಯುವ ಮೊದಲು ಒಬ್ಬ ವ್ಯಕ್ತಿ ಪ್ರತಿ ಪ್ರಕರಣವನ್ನು ಪರಿಶೀಲಿಸುತ್ತಾರೆ.", used: "ಈ ಲಿಂಕ್ ಈಗಾಗಲೇ ಬಳಸಲಾಗಿದೆ.", expired: "ಈ ಲಿಂಕ್ ಅವಧಿ ಮುಗಿದಿದೆ." },
 };
 
 /** A signed link a citizen opens on a phone: one question, three answers, no account needed. */
@@ -36,7 +36,7 @@ export default function Reply() {
   else if (send.isSuccess) body = <div role="status"><h2>{t.thanks}</h2><p>{t.thanksNote}</p></div>;
   else body = (
     <>
-      <p className="reply-ask">{t.ask(info.data.category.replace(/_/g, " "), info.data.ward)}</p>
+      <p className="reply-ask">{t.ask((info.data.category ?? t.fallbackCategory).replace(/_/g, " "), info.data.ward ?? t.fallbackWard)}</p>
       <div className="reply-actions">
         {(["yes", "partly", "no"] as const).map((a) => <button key={a} type="button" className="btn btn-secondary reply-btn" disabled={send.isPending} onClick={() => send.mutate(a)}>{t[a]}</button>)}
       </div>

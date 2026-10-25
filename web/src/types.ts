@@ -156,4 +156,4 @@ export interface VerificationRecord {
   note: string;
   pending_reason?: string | null;
 }
-export interface ReplyInfo { ticket_id: string; category: string; ward: string; lang: string; status: "open" | "answered" | "expired" }
+export interface ReplyInfo { ticket_id: string; category: string | null; ward: string | null; lang: string; status: "open" | "answered" | "expired" }
